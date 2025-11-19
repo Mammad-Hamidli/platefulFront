@@ -70,7 +70,7 @@ The frontend expects one of these endpoints:
     "id": 1,
     "username": "superadmin",
     "email": "admin@example.com",
-    "role": "SUPERADMIN"
+    "role": "ROLE_SUPERADMIN"
   }
 }
 
@@ -92,7 +92,7 @@ The frontend expects one of these endpoints:
   "id": 1,
   "username": "superadmin",
   "email": "admin@example.com",
-  "role": "SUPERADMIN"
+  "role": "ROLE_SUPERADMIN"
 }
 ```
 
@@ -125,7 +125,7 @@ Check if your backend returns:
 - ✅ Status 200 on success
 - ✅ JWT token in response
 - ✅ User object with `role` field
-- ✅ Role value matches: `SUPERADMIN`, `ADMIN`, `WAITER`, `KITCHEN`, or `CUSTOMER`
+- ✅ Role value matches: `ROLE_SUPERADMIN`, `ROLE_ADMIN`, or `ROLE_WAITER`
 
 ### 7. Check Vite Proxy
 
