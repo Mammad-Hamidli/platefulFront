@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import type { AuthSession, AuthUser, UserRole } from '@/types/auth';
 import { DASHBOARD_REDIRECTS } from '@/lib/env';
 
-interface Credentials {
-  username: string;
+interface LoginCredentials {
+  email: string;
   password: string;
 }
 
@@ -14,14 +14,14 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
-  login: (credentials: Credentials) => Promise<AuthUser>;
+  login: (credentials: LoginCredentials) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const roleToPath = (role: UserRole) => DASHBOARD_REDIRECTS[role] ?? '/dashboard/admin';
+const roleToPath = (role: UserRole) => DASHBOARD_REDIRECTS[role] ?? '/admin/dashboard';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -30,12 +30,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
 
   const handleSessionResponse = useCallback((session: AuthSession) => {
-    if (session.user?.role === 'ROLE_WAITER') {
+    if (!session || !session.user || !session.token) {
       setUser(null);
       setToken(null);
       return;
     }
-    setUser(session.user);
+
+    if (session.user.role === 'ROLE_WAITER') {
+      setUser(null);
+      setToken(null);
+      return;
+    }
+
+    const normalizedUser: AuthUser = {
+      ...session.user,
+      permissions: Array.isArray(session.user.permissions) ? session.user.permissions : [],
+    };
+
+    setUser(normalizedUser);
     setToken(session.token);
   }, []);
 
@@ -62,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshSession]);
 
   const login = useCallback(
-    async (credentials: Credentials) => {
+    async (credentials: LoginCredentials) => {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

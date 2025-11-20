@@ -1,57 +1,47 @@
 export interface Restaurant {
   id: number;
   name: string;
-  description?: string;
-  address?: string;
+  ownerSuperAdminId: number;
+  timezone?: string | null;
+  currency?: string | null;
+  settingsJson?: string | null;
 }
 
 export interface Branch {
   id: number;
   restaurantId: number;
   name: string;
-  address?: string;
-  phone?: string;
+  adminUserId: number | null;
 }
 
-export interface AdminUser {
+export interface UserRecord {
   id: number;
-  username: string;
-  email?: string;
-  role: 'ROLE_ADMIN';
-  branchId?: number | null;
-}
-
-export interface WaiterUser {
-  id: number;
-  username: string;
-  email?: string;
-  role: 'ROLE_WAITER';
-  branchId?: number | null;
-}
-
-export interface StaffMember {
-  id: number;
-  username: string;
-  email?: string;
-  role: 'ROLE_ADMIN' | 'ROLE_WAITER';
-  branchId?: number | null;
+  email: string;
+  role: string;
+  restaurantId: number;
+  branchId: number | null;
+  fullName?: string | null;
+  phone?: string | null;
 }
 
 export interface MenuItem {
   id: number;
+  restaurantId: number;
   name: string;
-  description?: string;
-  price: number;
-  category?: string;
-  available?: boolean;
-  branchId?: number;
+  description?: string | null;
+  priceCents: number;
+  category?: string | null;
+  isAvailable: boolean;
 }
 
 export interface TableEntity {
   id: number;
-  number: number;
-  capacity: number;
-  status?: string;
+  restaurantId: number;
   branchId: number;
+  name: string;
+  tableNumber: number | null;
+  seatCount: number | null;
+  active: boolean;
+  qrCode: string | null;
 }
 

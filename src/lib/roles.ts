@@ -16,8 +16,8 @@ export const normalizeUserRole = (role?: string | null): UserRole | undefined =>
 };
 
 export const rolePathMap: Record<UserRole, string> = {
-  ROLE_SUPERADMIN: '/dashboard/superadmin',
-  ROLE_ADMIN: '/dashboard/admin',
+  ROLE_SUPERADMIN: '/superadmin/dashboard',
+  ROLE_ADMIN: '/admin/dashboard',
   ROLE_WAITER: '/login',
 };
 

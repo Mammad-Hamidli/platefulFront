@@ -8,14 +8,14 @@ import { DASHBOARD_REDIRECTS } from '@/lib/env';
 export default function LoginPage() {
   const router = useRouter();
   const { login, user, loading } = useAuth();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
-      const destination = DASHBOARD_REDIRECTS[user.role] ?? '/dashboard/admin';
+      const destination = DASHBOARD_REDIRECTS[user.role] ?? '/admin/dashboard';
       router.replace(destination);
     }
   }, [loading, user, router]);
@@ -25,7 +25,7 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login({ username, password });
+      await login({ email, password });
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -39,7 +39,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <h1 className="mb-2 text-center text-3xl font-semibold text-slate-900">PlatefulMenu</h1>
         <p className="mb-6 text-center text-sm text-slate-500">
-          Sign in with your administrator credentials to manage your venue.
+          Sign in with your administrator email and password to manage your venue.
         </p>
 
         {error && (
@@ -50,19 +50,19 @@ export default function LoginPage() {
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-sm font-medium text-slate-700" htmlFor="username">
-              Username
+            <label className="block text-sm font-medium text-slate-700" htmlFor="email">
+              Email
             </label>
             <input
-              id="username"
-              name="username"
-              type="text"
+              id="email"
+              name="email"
+              type="email"
               required
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your username"
+              placeholder="admin@restaurant.com"
             />
           </div>
 

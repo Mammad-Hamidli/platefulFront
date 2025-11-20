@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { API_BASE_URL } from '@/lib/env';
 import type { AuthSession } from '@/types/auth';
-import { buildAuthUser } from '@/lib/auth';
+import { applyClaimsToUser, buildAuthUser, buildUserFromClaims } from '@/lib/auth';
+import { parseJwt } from '@/lib/token';
 
 export async function GET() {
   const token = cookies().get('token')?.value;
@@ -30,7 +31,13 @@ export async function GET() {
   }
 
   const rawUser = await profileResponse.json();
-  const user = buildAuthUser(rawUser) ?? null;
+  const claims = parseJwt(token);
+  let user = buildAuthUser(rawUser, claims) ?? buildUserFromClaims(claims) ?? null;
+
+  if (user) {
+    applyClaimsToUser(user, claims);
+  }
+
   const session: AuthSession = { token, user };
 
   if (!user) {
@@ -41,7 +48,12 @@ export async function GET() {
   }
 
   const response = NextResponse.json(session);
-  response.cookies.set('role', user.role, { httpOnly: false, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/' });
+  response.cookies.set('role', user.role, {
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  });
   return response;
 }
 

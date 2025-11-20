@@ -6,22 +6,28 @@ import { useAuth } from '@/hooks/useAuth';
 
 const NAV_LINKS: Record<
   'ROLE_SUPERADMIN' | 'ROLE_ADMIN' | 'ROLE_WAITER',
-  { label: string; href: string }[]
+  { label: string; href: string; exact?: boolean }[]
 > = {
   ROLE_SUPERADMIN: [
-    { label: 'Overview', href: '/dashboard/superadmin' },
-    { label: 'Restaurants', href: '/dashboard/superadmin#restaurants' },
-    { label: 'Admins', href: '/dashboard/superadmin#admins' },
-    { label: 'Branches', href: '/dashboard/superadmin#branches' },
+    { label: 'Dashboard', href: '/superadmin/dashboard' },
+    { label: 'Branches', href: '/superadmin/branches' },
+    { label: 'Admins', href: '/superadmin/admins' },
+    { label: 'Staff', href: '/superadmin/staff' },
   ],
   ROLE_ADMIN: [
-    { label: 'Overview', href: '/dashboard/admin' },
-    { label: 'Branches', href: '/dashboard/admin#branches' },
-    { label: 'Menu', href: '/dashboard/admin#menu' },
-    { label: 'Tables', href: '/dashboard/admin#tables' },
-    { label: 'Waiters', href: '/dashboard/admin#waiters' },
+    { label: 'Dashboard', href: '/admin/dashboard' },
+    { label: 'Staff', href: '/admin/staff' },
+    { label: 'Tables', href: '/admin/tables' },
+    { label: 'Menu', href: '/admin/menu' },
   ],
   ROLE_WAITER: [],
+};
+
+const isActive = (pathname: string, href: string, exact = false) => {
+  if (exact) {
+    return pathname === href;
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
 };
 
 export function Sidebar() {
@@ -36,15 +42,19 @@ export function Sidebar() {
     <aside className="flex w-72 flex-col gap-6 border-r border-slate-200 bg-white px-4 py-6">
       <div>
         <p className="text-xs uppercase tracking-wide text-slate-400">Signed in as</p>
-        <p className="mt-1 text-lg font-semibold text-slate-900">{user.username}</p>
+        <p className="mt-1 text-lg font-semibold text-slate-900">{user.email}</p>
         <p className="text-sm capitalize text-slate-500">
           {user.role.replace('ROLE_', '').toLowerCase()}
+        </p>
+        <p className="text-xs text-slate-400">
+          {user.restaurantName ?? `Restaurant #${user.restaurantId}`}
+          {user.branchId ? ` • Branch #${user.branchId}` : ''}
         </p>
       </div>
 
       <nav className="flex flex-col gap-1">
         {links.map((link) => {
-          const active = pathname === link.href.split('#')[0];
+          const active = isActive(pathname, link.href, link.exact);
           return (
             <Link
               key={link.href}

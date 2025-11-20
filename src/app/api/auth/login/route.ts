@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { API_BASE_URL } from '@/lib/env';
 import type { AuthSession, AuthUser } from '@/types/auth';
-import { buildAuthUser } from '@/lib/auth';
+import { applyClaimsToUser, buildAuthUser, buildUserFromClaims } from '@/lib/auth';
+import { parseJwt } from '@/lib/token';
 
 interface LoginPayload {
-  username: string;
+  email: string;
   password: string;
 }
 
@@ -19,15 +20,23 @@ const cookieOptions = {
 const extractAuthResponse = (data: any): AuthSession => {
   const token: string | undefined =
     data?.token ?? data?.accessToken ?? data?.jwt ?? data?.access_token;
-  let user: AuthUser | undefined = buildAuthUser(data?.user);
+
+  const claims = parseJwt(token);
+  let user: AuthUser | undefined = buildAuthUser(data?.user, claims);
 
   if (!user) {
-    user = buildAuthUser(data);
+    user = buildAuthUser(data, claims);
+  }
+
+  if (!user) {
+    user = buildUserFromClaims(claims);
   }
 
   if (!token || !user) {
     throw new Error('Invalid authentication response from backend');
   }
+
+  applyClaimsToUser(user, claims);
 
   return { token, user };
 };
@@ -44,7 +53,7 @@ export async function POST(request: Request) {
   });
 
   if (response.status === 401) {
-    return NextResponse.json({ message: 'Invalid username or password' }, { status: 401 });
+    return NextResponse.json({ message: 'Invalid email or password' }, { status: 401 });
   }
 
   if (!response.ok) {
@@ -84,11 +93,7 @@ export async function POST(request: Request) {
 
   const cookieStore = cookies();
   cookieStore.set('token', session.token, cookieOptions);
-  cookieStore.set(
-    'role',
-    session.user.role,
-    { ...cookieOptions, httpOnly: false }
-  );
+  cookieStore.set('role', session.user.role, { ...cookieOptions, httpOnly: false });
 
   return NextResponse.json(session);
 }

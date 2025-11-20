@@ -2,11 +2,12 @@ export type UserRole = 'ROLE_SUPERADMIN' | 'ROLE_ADMIN' | 'ROLE_WAITER';
 
 export interface AuthUser {
   id: number;
-  username: string;
+  email: string;
   role: UserRole;
-  email?: string;
-  restaurantId?: number | null;
-  branchId?: number | null;
+  restaurantId: number;
+  branchId: number | null;
+  restaurantName?: string | null;
+  permissions: string[];
 }
 
 export interface AuthSession {

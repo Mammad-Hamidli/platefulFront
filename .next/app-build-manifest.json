@@ -16,20 +16,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(auth)/login/page.js"
     ],
-    "/dashboard/superadmin/page": [
+    "/superadmin/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/superadmin/page.js"
+      "static/chunks/app/superadmin/dashboard/page.js"
     ],
-    "/dashboard/layout": [
+    "/superadmin/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/layout.js"
+      "static/chunks/app/superadmin/layout.js"
     ],
-    "/dashboard/admin/page": [
+    "/superadmin/admins/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/admin/page.js"
+      "static/chunks/app/superadmin/admins/page.js"
     ]
   }
 }
