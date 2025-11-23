@@ -42,6 +42,10 @@ export default function SuperadminDashboardPage() {
           listBranches(api, user.restaurantId),
         ]);
         if (cancelled) return;
+        console.log('[SuperadminDashboard] load success', {
+          restaurant,
+          branchCount: branches.length,
+        });
         setState({ restaurant, branches, loading: false, error: null });
       } catch (error) {
         console.error('[SuperadminDashboard] load error', error);
@@ -103,9 +107,27 @@ export default function SuperadminDashboardPage() {
               <h2 className="text-2xl font-semibold text-slate-900">{state.restaurant.name}</h2>
               <dl className="grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-slate-400">Owner SuperAdmin ID</dt>
-                  <dd className="mt-1 text-base text-slate-900">{state.restaurant.ownerSuperAdminId}</dd>
+                  <dt className="text-xs uppercase tracking-wide text-slate-400">Restaurant ID</dt>
+                  <dd className="mt-1 text-base text-slate-900">{state.restaurant.restaurantId ?? state.restaurant.id}</dd>
                 </div>
+                {state.restaurant.ownerUserId !== null ? (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">
+                      Owner User ID
+                    </dt>
+                    <dd className="mt-1 text-base text-slate-900">
+                      {state.restaurant.ownerUserId}
+                    </dd>
+                  </div>
+                ) : null}
+                {state.restaurant.ownerEmail ? (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">Owner Email</dt>
+                    <dd className="mt-1 text-base text-slate-900">
+                      {state.restaurant.ownerEmail}
+                    </dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-slate-400">Timezone</dt>
                   <dd className="mt-1 text-base text-slate-900">{state.restaurant.timezone ?? '—'}</dd>

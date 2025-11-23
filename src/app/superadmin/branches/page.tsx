@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import {
@@ -50,10 +50,54 @@ export default function SuperadminBranchesPage() {
 
   const restaurantId = user?.restaurantId ?? null;
 
+  const fetchBranchesAndAdmins = useCallback(async () => {
+    if (!restaurantId) {
+      return {
+        branches: [],
+        admins: [],
+      };
+    }
+
+    const [branches, admins] = await Promise.all([
+      listBranches(api, restaurantId),
+      listAdminsForRestaurant(api, restaurantId),
+    ]);
+
+    return { branches, admins };
+  }, [api, restaurantId]);
+
+  const refreshData = useCallback(async () => {
+    if (!restaurantId) {
+      return;
+    }
+    try {
+      const { branches, admins } = await fetchBranchesAndAdmins();
+      setState((prev) => ({
+        ...prev,
+        branches,
+        admins,
+        loading: false,
+        error: null,
+      }));
+    } catch (error) {
+      console.error('[SuperadminBranches] refresh error', error);
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        error: 'Failed to refresh branch data.',
+      }));
+    }
+  }, [fetchBranchesAndAdmins, restaurantId]);
+
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
+      if (user?.role !== 'ROLE_SUPERADMIN') {
+        setState(INITIAL_STATE);
+        return;
+      }
+
       if (!restaurantId) {
         setState({
           branches: [],
@@ -67,11 +111,12 @@ export default function SuperadminBranchesPage() {
       setState((prev) => ({ ...prev, loading: true, error: null }));
 
       try {
-        const [branches, admins] = await Promise.all([
-          listBranches(api, restaurantId),
-          listAdminsForRestaurant(api, restaurantId),
-        ]);
+        const { branches, admins } = await fetchBranchesAndAdmins();
         if (cancelled) return;
+        console.log('[SuperadminBranches] load success', {
+          branchCount: branches.length,
+          adminCount: admins.length,
+        });
         setState({ branches, admins, loading: false, error: null });
       } catch (error) {
         console.error('[SuperadminBranches] load error', error);
@@ -80,22 +125,34 @@ export default function SuperadminBranchesPage() {
       }
     };
 
-    if (user?.role === 'ROLE_SUPERADMIN') {
-      void load();
-    } else {
-      setState(INITIAL_STATE);
-    }
+    void load();
 
     return () => {
       cancelled = true;
     };
-  }, [api, restaurantId, user]);
+  }, [fetchBranchesAndAdmins, restaurantId, user]);
 
   const adminLookup = useMemo(() => {
     const map = new Map<number, UserRecord>();
-    state.admins.forEach((admin) => map.set(admin.id, admin));
+    state.admins.forEach((admin) => {
+      const adminUserId = admin.adminUserId ?? admin.id;
+      if (adminUserId !== null && adminUserId !== undefined) {
+        map.set(adminUserId, admin);
+      }
+    });
     return map;
   }, [state.admins]);
+
+  const assignedAdminIds = useMemo(() => {
+    const ids = new Set<number>();
+    state.branches.forEach((branch) => {
+      const adminId = branch.adminUserId ?? branch.managerUserId ?? null;
+      if (adminId !== null && adminId !== undefined) {
+        ids.add(adminId);
+      }
+    });
+    return ids;
+  }, [state.branches]);
 
   const resetCreateForm = () => setCreateForm(EMPTY_FORM);
   const resetEditForm = () => {
@@ -109,14 +166,11 @@ export default function SuperadminBranchesPage() {
     setCreateSubmitting(true);
     setState((prev) => ({ ...prev, error: null }));
     try {
-      const branch = await createBranch(api, restaurantId, {
+      await createBranch(api, restaurantId, {
         name: createForm.name.trim(),
         adminUserId: createForm.adminUserId ? Number(createForm.adminUserId) : null,
       });
-      setState((prev) => ({
-        ...prev,
-        branches: [branch, ...prev.branches],
-      }));
+      await refreshData();
       resetCreateForm();
       setShowCreate(false);
     } catch (error) {
@@ -141,14 +195,16 @@ export default function SuperadminBranchesPage() {
     setEditSubmitting(true);
     setState((prev) => ({ ...prev, error: null }));
     try {
-      const updated = await updateBranch(api, editingBranch.id, {
-        name: editForm.name.trim(),
-        adminUserId: editForm.adminUserId ? Number(editForm.adminUserId) : null,
-      });
-      setState((prev) => ({
-        ...prev,
-        branches: prev.branches.map((branch) => (branch.id === updated.id ? updated : branch)),
-      }));
+      await updateBranch(
+        api,
+        editingBranch.id,
+        {
+          name: editForm.name.trim(),
+          adminUserId: editForm.adminUserId ? Number(editForm.adminUserId) : null,
+        },
+        restaurantId ?? undefined
+      );
+      await refreshData();
       resetEditForm();
     } catch (error) {
       console.error('[SuperadminBranches] update error', error);
@@ -165,10 +221,7 @@ export default function SuperadminBranchesPage() {
     setState((prev) => ({ ...prev, error: null }));
     try {
       await deleteBranch(api, branchId);
-      setState((prev) => ({
-        ...prev,
-        branches: prev.branches.filter((branch) => branch.id !== branchId),
-      }));
+      await refreshData();
       if (editingBranch?.id === branchId) {
         resetEditForm();
       }
@@ -233,6 +286,14 @@ export default function SuperadminBranchesPage() {
         <div className="space-y-3">
           {state.branches.map((branch) => {
             const admin = branch.adminUserId ? adminLookup.get(branch.adminUserId) : null;
+            const assignedLabel =
+              admin?.fullName ??
+              branch.managerUsername ??
+              admin?.adminEmail ??
+              admin?.email ??
+              branch.managerEmail ??
+              admin?.username ??
+              'Unassigned';
             return (
               <article
                 key={branch.id}
@@ -248,7 +309,7 @@ export default function SuperadminBranchesPage() {
                           Assigned admin
                         </dt>
                         <dd className="mt-1 text-base text-slate-900">
-                          {admin ? admin.email : 'Unassigned'}
+                      {assignedLabel}
                         </dd>
                       </div>
                     </dl>
@@ -290,6 +351,8 @@ export default function SuperadminBranchesPage() {
           <BranchForm
             form={createForm}
             admins={state.admins}
+            assignedAdminIds={assignedAdminIds}
+            currentAdminId={null}
             disabled={createSubmitting}
             onChange={setCreateForm}
           />
@@ -327,6 +390,10 @@ export default function SuperadminBranchesPage() {
           <BranchForm
             form={editForm}
             admins={state.admins}
+            assignedAdminIds={assignedAdminIds}
+            currentAdminId={
+              editingBranch?.adminUserId ?? editingBranch?.managerUserId ?? null
+            }
             disabled={editSubmitting}
             onChange={setEditForm}
           />
@@ -387,11 +454,33 @@ function Modal({ title, open, onClose, children }: ModalProps) {
 interface BranchFormProps {
   form: BranchFormState;
   admins: UserRecord[];
+  assignedAdminIds: Set<number>;
+  currentAdminId: number | null;
   disabled?: boolean;
   onChange: (form: BranchFormState) => void;
 }
 
-function BranchForm({ form, admins, disabled, onChange }: BranchFormProps) {
+function BranchForm({
+  form,
+  admins,
+  assignedAdminIds,
+  currentAdminId,
+  disabled,
+  onChange,
+}: BranchFormProps) {
+  const adminOptions = admins
+    .map((admin) => ({
+      ...admin,
+      adminUserId: admin.adminUserId ?? admin.id ?? null,
+    }))
+    .filter((admin): admin is UserRecord & { adminUserId: number } => admin.adminUserId !== null && admin.adminUserId !== undefined)
+    .filter((admin) => {
+      if (currentAdminId !== null && admin.adminUserId === currentAdminId) {
+        return true;
+      }
+      return !assignedAdminIds.has(admin.adminUserId);
+    });
+
   return (
     <div className="space-y-4">
       <div>
@@ -420,9 +509,9 @@ function BranchForm({ form, admins, disabled, onChange }: BranchFormProps) {
           disabled={disabled}
         >
           <option value="">Unassigned</option>
-          {admins.map((admin) => (
-            <option key={admin.id} value={admin.id}>
-              {admin.email}
+          {adminOptions.map((admin) => (
+            <option key={admin.adminUserId} value={admin.adminUserId}>
+              {admin.fullName ?? admin.adminEmail ?? admin.email ?? `Admin #${admin.adminUserId}`}
             </option>
           ))}
         </select>

@@ -13,7 +13,7 @@ export async function GET() {
     return NextResponse.json(session);
   }
 
-  const profileResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+  const profileResponse = await fetch(`${API_BASE_URL}/users/me`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

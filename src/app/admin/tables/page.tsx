@@ -10,21 +10,18 @@ interface CreateTableForm {
   name: string;
   seatCount: string;
   tableNumber: string;
-  active: boolean;
 }
 
 interface EditTableForm {
   name: string;
   seatCount: string;
   tableNumber: string;
-  active: boolean;
 }
 
 const INITIAL_CREATE_FORM: CreateTableForm = {
   name: '',
   seatCount: '',
   tableNumber: '',
-  active: true,
 };
 
 export default function AdminTablesPage() {
@@ -43,7 +40,6 @@ export default function AdminTablesPage() {
     name: '',
     seatCount: '',
     tableNumber: '',
-    active: true,
   });
   const [saving, setSaving] = useState<boolean>(false);
 
@@ -107,19 +103,25 @@ export default function AdminTablesPage() {
     setCreating(true);
     setError(null);
     try {
-      const seatCount = createForm.seatCount ? Number(createForm.seatCount) : null;
+      const name = createForm.name.trim();
+      if (!name) {
+        throw new Error('Table name is required');
+      }
+      const seatCount = Number(createForm.seatCount);
+      if (!createForm.seatCount || isNaN(seatCount) || seatCount <= 0) {
+        throw new Error('Seat count must be a positive number');
+      }
       const tableNumber = createForm.tableNumber ? Number(createForm.tableNumber) : null;
       await createTable(api, restaurantId, branchId, {
-        name: createForm.name.trim() || `Table ${Date.now()}`,
+        name,
         seatCount,
         tableNumber,
-        active: createForm.active,
       });
       setCreateForm(INITIAL_CREATE_FORM);
       await refreshTables();
     } catch (err) {
       console.error('[AdminTables] create error', err);
-      setError('Failed to create table.');
+      setError(err instanceof Error ? err.message : 'Failed to create table.');
     } finally {
       setCreating(false);
     }
@@ -129,36 +131,41 @@ export default function AdminTablesPage() {
     setEditingId(table.id);
     setEditForm({
       name: table.name ?? '',
-      seatCount: table.seatCount != null ? String(table.seatCount) : '',
+      seatCount: table.seatCount != null ? String(table.seatCount) : '1',
       tableNumber: table.tableNumber != null ? String(table.tableNumber) : '',
-      active: table.active ?? true,
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditForm({ name: '', seatCount: '', tableNumber: '', active: true });
+    setEditForm({ name: '', seatCount: '', tableNumber: '' });
   };
 
   const handleEdit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (editingId == null) return;
+    if (editingId == null || !restaurantId || !branchId) return;
     setSaving(true);
     setError(null);
     try {
-      const seatCount = editForm.seatCount ? Number(editForm.seatCount) : null;
+      const name = editForm.name.trim();
+      if (!name) {
+        throw new Error('Table name is required');
+      }
+      const seatCount = Number(editForm.seatCount);
+      if (!editForm.seatCount || isNaN(seatCount) || seatCount <= 0) {
+        throw new Error('Seat count must be a positive number');
+      }
       const tableNumber = editForm.tableNumber ? Number(editForm.tableNumber) : null;
-      await updateTable(api, editingId, {
-        name: editForm.name.trim() || `Table ${editingId}`,
+      await updateTable(api, editingId, restaurantId, branchId, {
+        name,
         seatCount,
         tableNumber,
-        active: editForm.active,
       });
       cancelEdit();
       await refreshTables();
     } catch (err) {
       console.error('[AdminTables] update error', err);
-      setError('Failed to update table.');
+      setError(err instanceof Error ? err.message : 'Failed to update table.');
     } finally {
       setSaving(false);
     }
@@ -213,10 +220,11 @@ export default function AdminTablesPage() {
         <form className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4" onSubmit={handleCreate}>
           <div>
             <label className="block text-xs font-medium text-slate-600" htmlFor="table-name">
-              Table name
+              Table name <span className="text-red-500">*</span>
             </label>
             <input
               id="table-name"
+              required
               value={createForm.name}
               onChange={(event) =>
                 setCreateForm((prev) => ({ ...prev, name: event.target.value }))
@@ -241,10 +249,13 @@ export default function AdminTablesPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600" htmlFor="table-seat">
-              Seat count
+              Seat count <span className="text-red-500">*</span>
             </label>
             <input
               id="table-seat"
+              type="number"
+              min="1"
+              required
               value={createForm.seatCount}
               onChange={(event) =>
                 setCreateForm((prev) => ({ ...prev, seatCount: event.target.value }))
@@ -252,19 +263,6 @@ export default function AdminTablesPage() {
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
               placeholder="4"
             />
-          </div>
-          <div className="md:col-span-2 lg:col-span-4 flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input
-                type="checkbox"
-                checked={createForm.active}
-                onChange={(event) =>
-                  setCreateForm((prev) => ({ ...prev, active: event.target.checked }))
-                }
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              Active
-            </label>
           </div>
           <div className="md:col-span-2 lg:col-span-4 flex items-center gap-3">
             <button
@@ -349,8 +347,13 @@ export default function AdminTablesPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-blue-800">Seat count</label>
+                      <label className="block text-xs font-medium text-blue-800">
+                        Seat count <span className="text-red-500">*</span>
+                      </label>
                       <input
+                        type="number"
+                        min="1"
+                        required
                         value={editForm.seatCount}
                         onChange={(event) =>
                           setEditForm((prev) => ({ ...prev, seatCount: event.target.value }))
@@ -359,17 +362,6 @@ export default function AdminTablesPage() {
                       />
                     </div>
                   </div>
-                  <label className="mt-3 flex items-center gap-2 text-sm text-blue-800">
-                    <input
-                      type="checkbox"
-                      checked={editForm.active}
-                      onChange={(event) =>
-                        setEditForm((prev) => ({ ...prev, active: event.target.checked }))
-                      }
-                      className="h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Active
-                  </label>
                   <div className="mt-4 flex items-center gap-3">
                     <button
                       type="submit"
@@ -391,7 +383,7 @@ export default function AdminTablesPage() {
                         Table {table.tableNumber ?? table.id}
                       </h3>
                       <p className="text-xs text-slate-500">
-                        Seats {table.seatCount ?? 'N/A'} • {table.active ? 'Active' : 'Inactive'}
+                        Seats {table.seatCount ?? 'N/A'}
                       </p>
                       {table.name ? (
                         <p className="text-xs text-slate-500">Label: {table.name}</p>

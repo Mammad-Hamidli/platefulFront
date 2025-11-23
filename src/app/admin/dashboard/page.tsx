@@ -57,6 +57,13 @@ export default function AdminDashboardPage() {
 
         if (cancelled) return;
 
+        console.log('[AdminDashboard] load success', {
+          branchId: branch?.id,
+          staffCount: staff.length,
+          tableCount: tables.length,
+          menuCount: menu.length,
+        });
+
         setState({
           branch,
           staff,
@@ -178,17 +185,23 @@ export default function AdminDashboardPage() {
             <p className="mt-3 text-sm text-slate-500">No staff registered yet.</p>
           ) : (
             <ul className="mt-3 space-y-2 text-sm text-slate-600">
-              {state.staff.map((member) => (
-                <li
-                  key={member.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
-                >
-                  <span>{member.email}</span>
-                  <span className="text-xs uppercase text-slate-400">
-                    {member.role.replace('ROLE_', '')}
-                  </span>
-                </li>
-              ))}
+              {state.staff.map((member) => {
+                const identifier =
+                  member.id ?? member.email ?? member.username ?? Math.random();
+                const label = member.email ?? member.username ?? 'Unknown';
+                const roleLabel = member.role.startsWith('ROLE_')
+                  ? member.role.replace('ROLE_', '')
+                  : member.role;
+                return (
+                  <li
+                    key={identifier}
+                    className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                  >
+                    <span>{label}</span>
+                    <span className="text-xs uppercase text-slate-400">{roleLabel}</span>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -233,14 +246,21 @@ export default function AdminDashboardPage() {
           </p>
         ) : (
           <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {state.menu.slice(0, 6).map((item) => (
-              <li key={item.id} className="rounded-lg border border-slate-100 px-3 py-2">
-                <p className="text-sm font-semibold text-slate-800">{item.name}</p>
-                <p className="text-xs text-slate-500">
-                  {(item.priceCents ?? 0) / 100} • {item.isAvailable ? 'Available' : 'Unavailable'}
-                </p>
-              </li>
-            ))}
+            {state.menu.slice(0, 6).map((item) => {
+              const price =
+                item.price ??
+                (item.priceCents !== null && item.priceCents !== undefined
+                  ? item.priceCents / 100
+                  : null);
+              return (
+                <li key={item.id} className="rounded-lg border border-slate-100 px-3 py-2">
+                  <p className="text-sm font-semibold text-slate-800">{item.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {price !== null ? price : '—'} • {item.isAvailable ? 'Available' : 'Unavailable'}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

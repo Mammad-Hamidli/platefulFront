@@ -6,28 +6,31 @@ import { useApi } from '@/hooks/useApi';
 import { createStaff, deleteStaff, listStaff, updateStaff } from '@/lib/api/admin';
 import type { UserRecord } from '@/types/entities';
 
-type StaffRole = 'ROLE_WAITER' | 'ROLE_KITCHEN';
+type StaffRole = 'ROLE_WAITER' | 'ROLE_KITCHEN' | 'ROLE_ADMIN';
 
 const ROLE_OPTIONS: { label: string; value: StaffRole }[] = [
   { label: 'Waiter', value: 'ROLE_WAITER' },
   { label: 'Kitchen', value: 'ROLE_KITCHEN' },
+  { label: 'Admin', value: 'ROLE_ADMIN' },
 ];
 
 interface CreateStaffForm {
-  email: string;
-  password: string;
-  role: StaffRole;
+  username: string; // Backend requires username
+  password: string; // Required only for ROLE_ADMIN, must be empty for WAITER/KITCHEN
+  role: StaffRole; // Must be ROLE_WAITER, ROLE_KITCHEN, or ROLE_ADMIN
+  email?: string; // Optional - will be auto-generated if not provided
 }
 
 interface EditStaffForm {
   role: StaffRole;
-  password: string;
+  password: string; // Optional - can only update password for admin roles
 }
 
 const INITIAL_CREATE_FORM: CreateStaffForm = {
-  email: '',
+  username: '',
   password: '',
   role: 'ROLE_WAITER',
+  email: '',
 };
 
 const INITIAL_EDIT_FORM: EditStaffForm = {
@@ -38,6 +41,7 @@ const INITIAL_EDIT_FORM: EditStaffForm = {
 const ROLE_LABEL: Record<StaffRole, string> = {
   ROLE_WAITER: 'Waiter',
   ROLE_KITCHEN: 'Kitchen',
+  ROLE_ADMIN: 'Admin',
 };
 
 const formatRole = (role: string) =>
@@ -76,6 +80,7 @@ export default function AdminStaffPage() {
       try {
         const data = await listStaff(api, branchId);
         if (!cancelled) {
+          console.log('[AdminStaff] load success', { count: data.length });
           setStaff(data);
         }
       } catch (err) {
@@ -118,15 +123,28 @@ export default function AdminStaffPage() {
     setCreating(true);
     setError(null);
     try {
-      const email = createForm.email.trim().toLowerCase();
-      if (!email) {
-        throw new Error('Email is required');
+      const username = createForm.username.trim();
+      if (!username) {
+        throw new Error('Username is required');
       }
+      // Ensure role has ROLE_ prefix (should already have it, but double-check)
+      const role = createForm.role.startsWith('ROLE_') ? createForm.role : `ROLE_${createForm.role}`;
+      const isAdminRole = role === 'ROLE_ADMIN' || role === 'ROLE_SUPERADMIN';
+      
+      // Validate password based on role
       const password = createForm.password.trim();
+      if (isAdminRole && !password) {
+        throw new Error('Password is required for admin roles');
+      }
+      if (!isAdminRole && password) {
+        throw new Error('Password cannot be provided for non-admin roles. Only ROLE_ADMIN can have passwords.');
+      }
+      
       await createStaff(api, restaurantId, branchId, {
-        email,
-        role: createForm.role,
-        password: password ? password : undefined,
+        username,
+        password: isAdminRole ? password : undefined, // Only include password for admin roles
+        role: role as StaffRole,
+        email: createForm.email?.trim() || undefined,
       });
       setCreateForm(INITIAL_CREATE_FORM);
       await refreshStaff();
@@ -139,9 +157,15 @@ export default function AdminStaffPage() {
   };
 
   const startEdit = (member: UserRecord) => {
-    setEditingEmail(member.email);
+    const key = member.username ?? member.email ?? null;
+    if (!key) {
+      setError('This staff member is missing a username. Please refresh the page.');
+      return;
+    }
+    setEditingEmail(key);
+    const memberRole = (member.role as StaffRole) || 'ROLE_WAITER';
     setEditForm({
-      role: ROLE_LABEL[member.role as StaffRole] ? (member.role as StaffRole) : 'ROLE_WAITER',
+      role: (ROLE_LABEL[memberRole] ? memberRole : 'ROLE_WAITER') as StaffRole,
       password: '',
     });
   };
@@ -157,30 +181,54 @@ export default function AdminStaffPage() {
     setSaving(true);
     setError(null);
     try {
+      // Find the current member to check their role
+      const currentMember = staff.find(
+        (m) => (m.username ?? m.email) === editingEmail
+      );
+      if (!currentMember) {
+        throw new Error('Staff member not found. Please refresh the page.');
+      }
+      
+      const currentRole = currentMember.role;
+      const isAdminRole = currentRole === 'ROLE_ADMIN' || currentRole === 'ROLE_SUPERADMIN';
+      
+      // Ensure role has ROLE_ prefix
+      const role = editForm.role.startsWith('ROLE_') ? editForm.role : `ROLE_${editForm.role}`;
       const password = editForm.password.trim();
-      await updateStaff(api, editingEmail, {
-        role: editForm.role,
-        password: password ? password : undefined,
+      
+      // Validate password update based on role
+      if (password && !isAdminRole) {
+        throw new Error('Password cannot be updated for non-admin roles. Only ROLE_ADMIN and ROLE_SUPERADMIN can have passwords.');
+      }
+      
+      await updateStaff(api, editingEmail, currentRole, {
+        role: role as StaffRole,
+        password: password || undefined, // Only send if provided and role allows it
       });
       cancelEdit();
       await refreshStaff();
     } catch (err) {
       console.error('[AdminStaff] update error', err);
-      setError('Failed to update staff member.');
+      setError(err instanceof Error ? err.message : 'Failed to update staff member.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (email: string) => {
-    if (!confirm('Remove this staff member?')) return;
+  const handleDelete = async (member: UserRecord) => {
+    const identifier = member.username ?? member.email ?? member.id;
+    if (!identifier) {
+      setError('Cannot delete: staff member is missing identifier. Please refresh the page.');
+      return;
+    }
+    if (!confirm(`Remove ${member.username ?? member.email ?? 'this staff member'}?`)) return;
     setError(null);
     try {
-      await deleteStaff(api, email);
+      await deleteStaff(api, identifier);
       await refreshStaff();
     } catch (err) {
       console.error('[AdminStaff] delete error', err);
-      setError('Failed to delete staff member.');
+      setError(err instanceof Error ? err.message : 'Failed to delete staff member.');
     }
   };
 
@@ -222,20 +270,59 @@ export default function AdminStaffPage() {
         <h2 className="text-lg font-semibold text-slate-800">Add staff member</h2>
         <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={handleCreate}>
           <div>
+            <label className="block text-xs font-medium text-slate-600" htmlFor="staff-username">
+              Username <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="staff-username"
+              type="text"
+              required
+              value={createForm.username}
+              onChange={(event) =>
+                setCreateForm((prev) => ({ ...prev, username: event.target.value }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              placeholder="waiter john"
+            />
+            <p className="mt-1 text-xs text-slate-500">This will be used for login</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600" htmlFor="staff-password">
+              Password {createForm.role === 'ROLE_ADMIN' ? <span className="text-red-500">*</span> : <span className="text-slate-400">(not for {createForm.role.replace('ROLE_', '').toLowerCase()})</span>}
+            </label>
+            <input
+              id="staff-password"
+              type="password"
+              required={createForm.role === 'ROLE_ADMIN'}
+              disabled={createForm.role !== 'ROLE_ADMIN'}
+              value={createForm.password}
+              onChange={(event) =>
+                setCreateForm((prev) => ({ ...prev, password: event.target.value }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none disabled:bg-slate-100 disabled:cursor-not-allowed"
+              placeholder={createForm.role === 'ROLE_ADMIN' ? 'Admin123!Pass' : 'Not required for this role'}
+            />
+            {createForm.role !== 'ROLE_ADMIN' && (
+              <p className="mt-1 text-xs text-slate-500">
+                Password cannot be provided for non-admin roles. Only ROLE_ADMIN can have passwords.
+              </p>
+            )}
+          </div>
+          <div>
             <label className="block text-xs font-medium text-slate-600" htmlFor="staff-email">
-              Email
+              Email (optional)
             </label>
             <input
               id="staff-email"
               type="email"
-              required
-              value={createForm.email}
+              value={createForm.email || ''}
               onChange={(event) =>
                 setCreateForm((prev) => ({ ...prev, email: event.target.value }))
               }
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
               placeholder="waiter@restaurant.com"
             />
+            <p className="mt-1 text-xs text-slate-500">Will be auto-generated if not provided</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600" htmlFor="staff-role">
@@ -255,21 +342,6 @@ export default function AdminStaffPage() {
                 </option>
               ))}
             </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-medium text-slate-600" htmlFor="staff-password">
-              Temporary password (optional)
-            </label>
-            <input
-              id="staff-password"
-              type="text"
-              value={createForm.password}
-              onChange={(event) =>
-                setCreateForm((prev) => ({ ...prev, password: event.target.value }))
-              }
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="Leave empty to auto-generate"
-            />
           </div>
           <div className="sm:col-span-2 flex items-center gap-3">
             <button
@@ -309,84 +381,144 @@ export default function AdminStaffPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {staff.map((member) =>
-              editingEmail === member.email ? (
-                <form
-                  key={member.email}
-                  className="rounded-lg border border-blue-200 bg-blue-50 p-4"
-                  onSubmit={handleEdit}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold text-blue-900">{member.email}</h3>
-                      <p className="text-xs text-blue-700">User ID: {member.id}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-blue-700 hover:text-blue-900"
-                      onClick={cancelEdit}
-                      disabled={saving}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-xs font-medium text-blue-800" htmlFor="edit-role">
-                        Role
-                      </label>
-                      <select
-                        id="edit-role"
-                        value={editForm.role}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({ ...prev, role: event.target.value as StaffRole }))
-                        }
-                        className="mt-1 w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+            {staff.map((member, index) => {
+              const key =
+                member.username ??
+                member.email ??
+                (member.id !== null && member.id !== undefined
+                  ? String(member.id)
+                  : `staff-${index}`);
+              const label = member.email ?? member.username ?? 'Unknown staff';
+              const roleLabel = formatRole(member.role);
+              const isEditing =
+                editingEmail === (member.username ?? member.email ?? null) && editingEmail !== null;
+
+              if (isEditing) {
+                return (
+                  <form
+                    key={`edit-${key}`}
+                    className="rounded-lg border border-blue-200 bg-blue-50 p-4"
+                    onSubmit={handleEdit}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="text-base font-semibold text-blue-900">{label}</h3>
+                        <p className="text-xs text-blue-700">User ID: {member.id ?? '—'}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-blue-700 hover:text-blue-900"
+                        onClick={cancelEdit}
+                        disabled={saving}
                       >
-                        {ROLE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        Cancel
+                      </button>
                     </div>
-                    <div>
-                      <label
-                        className="block text-xs font-medium text-blue-800"
-                        htmlFor="edit-password"
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-blue-800" htmlFor="edit-role">
+                          Role
+                        </label>
+                        <select
+                          id="edit-role"
+                          value={editForm.role}
+                          onChange={(event) =>
+                            setEditForm((prev) => ({
+                              ...prev,
+                              role: event.target.value as StaffRole,
+                            }))
+                          }
+                          className="mt-1 w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                        >
+                          {ROLE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {(() => {
+                        const currentMember = staff.find(
+                          (m) => (m.username ?? m.email) === editingEmail
+                        );
+                        const isAdminRole = currentMember && (currentMember.role === 'ROLE_ADMIN' || currentMember.role === 'ROLE_SUPERADMIN');
+                        return isAdminRole ? (
+                          <div>
+                            <label
+                              className="block text-xs font-medium text-blue-800"
+                              htmlFor="edit-password"
+                            >
+                              Reset password (optional)
+                            </label>
+                            <input
+                              id="edit-password"
+                              type="password"
+                              value={editForm.password}
+                              onChange={(event) =>
+                                setEditForm((prev) => ({ ...prev, password: event.target.value }))
+                              }
+                              className="mt-1 w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                              placeholder="Leave empty to keep current password"
+                            />
+                            <p className="mt-1 text-xs text-blue-700">
+                              Enter new password to update, or leave empty to keep current password.
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <label
+                              className="block text-xs font-medium text-blue-800"
+                              htmlFor="edit-password"
+                            >
+                              Password
+                            </label>
+                            <input
+                              id="edit-password"
+                              type="password"
+                              disabled
+                              value=""
+                              className="mt-1 w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-600 cursor-not-allowed"
+                              placeholder="Not available for this role"
+                            />
+                            <p className="mt-1 text-xs text-blue-700">
+                              Password cannot be updated for non-admin roles. Only ROLE_ADMIN and ROLE_SUPERADMIN can have passwords.
+                            </p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    <div className="mt-4 flex items-center gap-3">
+                      <button
+                        type="submit"
+                        disabled={saving}
+                        className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Reset password (optional)
-                      </label>
-                      <input
-                        id="edit-password"
-                        type="text"
-                        value={editForm.password}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({ ...prev, password: event.target.value }))
-                        }
-                        className="mt-1 w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        placeholder="Leave empty to keep current password"
-                      />
+                        {saving ? 'Saving…' : 'Save changes'}
+                      </button>
                     </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-3">
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {saving ? 'Saving…' : 'Save changes'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
+                  </form>
+                );
+              }
+
+              return (
                 <article
-                  key={member.email}
+                  key={key}
                   className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div>
-                    <h3 className="text-base font-semibold text-slate-900">{member.email}</h3>
-                    <p className="text-xs text-slate-500">Role: {formatRole(member.role)}</p>
+                    <h3 className="text-base font-semibold text-slate-900">
+                      {member.username ?? member.email ?? 'Unknown staff'}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Username: {member.username ?? '—'}
+                    </p>
+                    {member.email && member.email !== member.username ? (
+                      <p className="text-xs text-slate-500">Email: {member.email}</p>
+                    ) : null}
+                    <p className="text-xs text-slate-500">Role: {roleLabel}</p>
+                    {member.id ? (
+                      <p className="text-xs text-slate-400">ID: {member.id}</p>
+                    ) : null}
                   </div>
                   <div className="flex gap-2 text-xs font-medium">
                     <button
@@ -398,15 +530,15 @@ export default function AdminStaffPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(member.email)}
+                      onClick={() => handleDelete(member)}
                       className="inline-flex items-center rounded-lg border border-red-200 px-3 py-1 text-red-600 transition hover:bg-red-50"
                     >
                       Delete
                     </button>
                   </div>
                 </article>
-              )
-            )}
+              );
+            })}
           </div>
         )}
       </section>

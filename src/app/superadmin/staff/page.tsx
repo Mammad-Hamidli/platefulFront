@@ -42,6 +42,10 @@ export default function SuperadminStaffPage() {
           listBranches(api, restaurantId),
         ]);
         if (cancelled) return;
+        console.log('[SuperadminStaff] load success', {
+          staffCount: staff.length,
+          branchCount: branches.length,
+        });
         setState({ staff, branches, loading: false, error: null });
       } catch (error) {
         console.error('[SuperadminStaff] load error', error);
@@ -120,10 +124,14 @@ export default function SuperadminStaffPage() {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {state.staff.map((member) => {
                 const branch = member.branchId ? branchLookup.get(member.branchId) : null;
+                const email = member.email ?? member.username ?? 'Unknown';
+                const roleLabel = member.role.startsWith('ROLE_')
+                  ? member.role.replace('ROLE_', '')
+                  : member.role;
                 return (
-                  <tr key={member.id}>
-                    <td className="px-4 py-3 font-medium text-slate-900">{member.email}</td>
-                    <td className="px-4 py-3">{member.role.replace('ROLE_', '')}</td>
+                  <tr key={`${member.id ?? email}`}>
+                    <td className="px-4 py-3 font-medium text-slate-900">{email}</td>
+                    <td className="px-4 py-3">{roleLabel}</td>
                     <td className="px-4 py-3">{branch ? branch.name : 'Unassigned'}</td>
                     <td className="px-4 py-3">{member.phone ?? '—'}</td>
                   </tr>
