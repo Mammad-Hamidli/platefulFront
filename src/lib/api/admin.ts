@@ -3,14 +3,20 @@ import type { Branch, MenuItem, TableEntity, UserRecord } from '@/types/entities
 
 export interface StaffCreatePayload {
   username: string; // Required - backend expects username
-  password?: string; // Required only for ROLE_ADMIN, must be null/omitted for WAITER/KITCHEN
-  role: 'ROLE_WAITER' | 'ROLE_KITCHEN' | 'ROLE_ADMIN'; // Must have ROLE_ prefix
+  password?: string; // NOT allowed for staff roles - only for admin roles (but admins can't create other admins)
+  role: 'ROLE_WAITER' | 'ROLE_KITCHEN' | 'ROLE_CASHIER'; // Must have ROLE_ prefix - ROLE_ADMIN is NOT allowed
   email?: string; // Optional - backend also accepts email
+  phoneNumber: string; // Required - staff phone number
+  salaryAmount: number; // Required - staff salary amount
+  salaryPeriod: 'DAILY' | 'WEEKLY' | 'MONTHLY'; // Required - staff salary period
 }
 
 export interface StaffUpdatePayload {
-  role?: 'ROLE_WAITER' | 'ROLE_KITCHEN' | 'ROLE_ADMIN'; // Must have ROLE_ prefix
-  password?: string; // Optional - can only update password for admin roles
+  role?: 'ROLE_WAITER' | 'ROLE_KITCHEN' | 'ROLE_CASHIER'; // Must have ROLE_ prefix - ROLE_ADMIN is NOT allowed
+  password?: string; // NOT allowed for staff roles
+  phoneNumber?: string; // Optional - staff phone number
+  salaryAmount?: number; // Optional - staff salary amount
+  salaryPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY'; // Optional - staff salary period
 }
 
 export interface TablePayload {
@@ -34,6 +40,9 @@ interface UserDto {
   role?: string | null;
   restaurantId?: number | null;
   branchId?: number | null;
+  phoneNumber?: string | null; // Staff phone number
+  salaryAmount?: number | null; // Staff salary amount
+  salaryPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null; // Staff salary period
 }
 
 interface MenuItemSummaryDto {
@@ -68,9 +77,13 @@ interface WaiterSummaryDto {
   role?: string | null;
   restaurantId?: number | null;
   branchId?: number | null;
+  phoneNumber?: string | null; // Staff phone number
+  salaryAmount?: number | null; // Staff salary amount
+  salaryPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null; // Staff salary period
 }
 
-const STAFF_ROLES = new Set(['ROLE_WAITER', 'ROLE_KITCHEN']);
+// Staff roles that admins can create/manage (excluding ROLE_ADMIN)
+const STAFF_ROLES = new Set(['ROLE_WAITER', 'ROLE_KITCHEN', 'ROLE_CASHIER']);
 
 const ensureNumber = (value: unknown, fallback = 0): number => {
   const num = Number(value);
@@ -129,6 +142,10 @@ const mapUserToRecord = (user: UserDto): UserRecord => {
     role: normalizedRole,
     restaurantId,
     branchId,
+    phoneNumber: user.phoneNumber ?? null,
+    salaryAmount: user.salaryAmount ?? null,
+    salaryPeriod: user.salaryPeriod ?? null,
+    phone: user.phoneNumber ?? null, // Also map to phone for backwards compatibility
   };
 };
 
@@ -166,6 +183,8 @@ export const getBranch = async (api: AxiosInstance, branchId: number) => {
 };
 
 export const listStaff = async (api: AxiosInstance, branchId: number) => {
+  // Backend endpoint: GET /api/admin/staff
+  // Returns staff filtered by the currently logged-in admin's restaurant/branch
   const staffMap = new Map<string, UserRecord>();
 
   const upsert = (record: UserRecord) => {
@@ -188,36 +207,57 @@ export const listStaff = async (api: AxiosInstance, branchId: number) => {
   };
 
   try {
-    const { data } = await api.get<WaiterSummaryDto[]>('/admin/waiters/my');
-    (data ?? []).forEach((waiter) => {
-      const normalizedBranchId = ensureOptionalNumber(waiter.branchId);
-      if (normalizedBranchId !== null && normalizedBranchId !== branchId) {
-        return;
-      }
-      const record: UserRecord = {
-        id: waiter.waiterId ?? null,
-        username: waiter.username ?? null,
-        email: waiter.email ?? waiter.username ?? null,
-        role: ensureRolePrefix(waiter.role) || 'ROLE_WAITER',
-        restaurantId: waiter.restaurantId ?? null,
-        branchId: waiter.branchId ?? null,
-      };
-      if (STAFF_ROLES.has(record.role)) {
-        upsert(record);
-      }
-    });
-  } catch (error) {
-    console.warn('[api/admin] unable to load /admin/waiters/my', error);
-  }
-
-  try {
-    const { data } = await api.get<UserDto[]>('/users');
+    // Primary endpoint: GET /admin/staff (backend filters by admin's restaurant/branch)
+    const { data } = await api.get<UserDto[]>('/admin/staff');
     (data ?? [])
       .map(mapUserToRecord)
-      .filter((user) => user.branchId === branchId && STAFF_ROLES.has(user.role))
+      .filter((user) => {
+        // Additional client-side filter by branchId (backend should already filter, but double-check)
+        const normalizedBranchId = ensureOptionalNumber(user.branchId);
+        return normalizedBranchId === null || normalizedBranchId === branchId;
+      })
+      .filter((user) => STAFF_ROLES.has(user.role)) // Only include staff roles (exclude admins)
       .forEach(upsert);
   } catch (error) {
-    console.warn('[api/admin] unable to load /users for staff list', error);
+    console.warn('[api/admin] unable to load /admin/staff', error);
+    
+    // Fallback to legacy endpoints if new endpoint is not available
+    try {
+      const { data } = await api.get<WaiterSummaryDto[]>('/admin/waiters/my');
+      (data ?? []).forEach((waiter) => {
+        const normalizedBranchId = ensureOptionalNumber(waiter.branchId);
+        if (normalizedBranchId !== null && normalizedBranchId !== branchId) {
+          return;
+        }
+        const record: UserRecord = {
+          id: waiter.waiterId ?? null,
+          username: waiter.username ?? null,
+          email: waiter.email ?? waiter.username ?? null,
+          role: ensureRolePrefix(waiter.role) || 'ROLE_WAITER',
+          restaurantId: waiter.restaurantId ?? null,
+          branchId: waiter.branchId ?? null,
+          phoneNumber: waiter.phoneNumber ?? null,
+          salaryAmount: waiter.salaryAmount ?? null,
+          salaryPeriod: waiter.salaryPeriod ?? null,
+          phone: waiter.phoneNumber ?? null, // Also map to phone for backwards compatibility
+        };
+        if (STAFF_ROLES.has(record.role)) {
+          upsert(record);
+        }
+      });
+    } catch (fallbackError) {
+      console.warn('[api/admin] unable to load /admin/waiters/my', fallbackError);
+    }
+
+    try {
+      const { data } = await api.get<UserDto[]>('/users');
+      (data ?? [])
+        .map(mapUserToRecord)
+        .filter((user) => user.branchId === branchId && STAFF_ROLES.has(user.role))
+        .forEach(upsert);
+    } catch (fallbackError) {
+      console.warn('[api/admin] unable to load /users for staff list', fallbackError);
+    }
   }
 
   return Array.from(staffMap.values());
@@ -229,94 +269,160 @@ export const createStaff = async (
   branchId: number,
   payload: StaffCreatePayload
 ) => {
-  // Backend CreateUserRequest expects: username, password (only for admin roles), role, email, restaurantId, branchId
-  // Business rule: Password REQUIRED for ROLE_SUPERADMIN and ROLE_ADMIN
-  // Password MUST be null/not provided for WAITER, KITCHEN, etc.
+  // Backend CreateUserRequest expects: username, role, email, restaurantId, branchId, phoneNumber, salaryAmount, salaryPeriod
+  // Business rule: Admins CANNOT create other ADMIN accounts (only staff: WAITER, KITCHEN, CASHIER)
+  // Business rule: Password MUST NOT be provided for staff roles
   const username = payload.username.trim();
   if (!username) {
     throw new Error('Username is required');
   }
+  
   // Ensure role has ROLE_ prefix
   const role = payload.role.startsWith('ROLE_') ? payload.role : `ROLE_${payload.role}`;
-  const isAdminRole = role === 'ROLE_ADMIN' || role === 'ROLE_SUPERADMIN';
+  
+  // Validate that admin is not trying to create another admin
+  if (role === 'ROLE_ADMIN' || role === 'ROLE_SUPERADMIN') {
+    throw new Error('You cannot create admin accounts. Only staff members (Waiter, Kitchen, Cashier) can be created.');
+  }
+  
+  // Validate required staff fields
+  if (!payload.phoneNumber || !payload.phoneNumber.trim()) {
+    throw new Error('Phone number is required');
+  }
+  if (!payload.salaryAmount || payload.salaryAmount <= 0) {
+    throw new Error('Salary amount must be a positive number');
+  }
+  if (!payload.salaryPeriod) {
+    throw new Error('Salary period is required');
+  }
   
   // Backend also requires email, so derive it from username if not provided
   const email = payload.email?.trim().toLowerCase() || `${username.toLowerCase().replace(/\s+/g, '.')}@restaurant.local`;
   
-  // Build body based on role
+  // Build body - NO password field for staff roles
   const body: Record<string, unknown> = {
     username,
     role,
     email,
     restaurantId,
     branchId,
+    phoneNumber: payload.phoneNumber.trim(),
+    salaryAmount: Number(payload.salaryAmount),
+    salaryPeriod: payload.salaryPeriod,
   };
   
-  // Only include password for admin roles
-  if (isAdminRole) {
-    const password = payload.password?.trim();
-    if (!password) {
-      throw new Error('Password is required for admin roles');
+  try {
+    const { data } = await api.post<UserDto>('/admin/staff', body);
+    return mapUserToRecord({
+      id: data.id ?? null,
+      username: data.username ?? username,
+      email: data.email ?? email,
+      role: data.role ?? role,
+      restaurantId: data.restaurantId ?? restaurantId,
+      branchId: data.branchId ?? branchId,
+      phoneNumber: data.phoneNumber ?? payload.phoneNumber.trim(),
+      salaryAmount: data.salaryAmount ?? payload.salaryAmount,
+      salaryPeriod: data.salaryPeriod ?? payload.salaryPeriod,
+    });
+  } catch (error: any) {
+    // Handle 403 Forbidden - admin trying to create admin account
+    if (error?.response?.status === 403) {
+      throw new Error('You cannot create admin accounts. Only staff members can be created.');
     }
-    body.password = password;
-  } else {
-    // For non-admin roles, do NOT include password field at all
-    // Backend will reject if password is provided for non-admin roles
+    throw error;
   }
-  
-  const { data } = await api.post<UserDto>('/users', body);
-  return mapUserToRecord({
-    id: data.id ?? null,
-    username: data.username ?? username,
-    email: data.email ?? email,
-    role: data.role ?? role,
-    restaurantId: data.restaurantId ?? restaurantId,
-    branchId: data.branchId ?? branchId,
-  });
 };
 
 export const updateStaff = async (
   api: AxiosInstance,
-  usernameOrEmail: string,
+  idOrUsername: string | number,
   currentRole: string,
   payload: StaffUpdatePayload
 ) => {
-  const username = usernameOrEmail.toLowerCase();
-  // Backend UpdateUserRequest: password, role, restaurantId, branchId (all optional)
-  // Business rule: Password can only be updated for ROLE_SUPERADMIN and ROLE_ADMIN
+  // Backend endpoint: PUT /api/admin/staff/{id}
+  // Backend UpdateUserRequest: role, phoneNumber, salaryAmount, salaryPeriod (all optional)
+  // Business rule: Admins CANNOT update staff to ROLE_ADMIN
+  // Business rule: Password updates are NOT allowed for staff roles
   const body: Record<string, unknown> = {};
+  
   if (payload.role) {
     // Ensure role has ROLE_ prefix
     const role = payload.role.startsWith('ROLE_') ? payload.role : `ROLE_${payload.role}`;
+    
+    // Validate that admin is not trying to change role to admin
+    if (role === 'ROLE_ADMIN' || role === 'ROLE_SUPERADMIN') {
+      throw new Error('You cannot change staff role to admin. Only staff roles (Waiter, Kitchen, Cashier) are allowed.');
+    }
     body.role = role;
   }
   
-  // Only allow password updates for admin roles
-  const isAdminRole = currentRole === 'ROLE_ADMIN' || currentRole === 'ROLE_SUPERADMIN';
+  // Password updates are NOT allowed for staff roles
   if (payload.password && payload.password.trim()) {
-    if (!isAdminRole) {
-      throw new Error('Password cannot be updated for non-admin roles. Only ROLE_ADMIN and ROLE_SUPERADMIN can have passwords.');
-    }
-    body.password = payload.password.trim();
+    throw new Error('Password cannot be updated for staff members. Only admin accounts can have passwords.');
   }
   
-  const { data } = await api.patch<UserDto>(`/users/${encodeURIComponent(username)}`, body);
-  return mapUserToRecord({
-    id: data.id ?? null,
-    username: data.username ?? username,
-    email: data.email ?? username,
-    role: data.role ?? payload.role ?? currentRole,
-    restaurantId: data.restaurantId ?? null,
-    branchId: data.branchId ?? null,
-  });
+  // Update staff-specific fields if provided
+  if (payload.phoneNumber !== undefined) {
+    if (payload.phoneNumber && payload.phoneNumber.trim()) {
+      body.phoneNumber = payload.phoneNumber.trim();
+    } else if (payload.phoneNumber === null || payload.phoneNumber === '') {
+      throw new Error('Phone number is required');
+    }
+  }
+  
+  if (payload.salaryAmount !== undefined) {
+    if (payload.salaryAmount !== null && payload.salaryAmount <= 0) {
+      throw new Error('Salary amount must be a positive number');
+    }
+    if (payload.salaryAmount !== null) {
+      body.salaryAmount = Number(payload.salaryAmount);
+    }
+  }
+  
+  if (payload.salaryPeriod !== undefined && payload.salaryPeriod !== null) {
+    body.salaryPeriod = payload.salaryPeriod;
+  }
+  
+  // Use ID if available, otherwise fall back to username
+  const identifier = typeof idOrUsername === 'number' ? idOrUsername : idOrUsername.toLowerCase();
+  
+  try {
+    // Use the admin staff endpoint for updates: PUT /api/admin/staff/{id}
+    const { data } = await api.put<UserDto>(`/admin/staff/${encodeURIComponent(String(identifier))}`, body);
+    return mapUserToRecord({
+      id: data.id ?? null,
+      username: data.username ?? (typeof idOrUsername === 'string' ? idOrUsername : null),
+      email: data.email ?? null,
+      role: data.role ?? payload.role ?? currentRole,
+      restaurantId: data.restaurantId ?? null,
+      branchId: data.branchId ?? null,
+      phoneNumber: data.phoneNumber ?? payload.phoneNumber ?? null,
+      salaryAmount: data.salaryAmount ?? payload.salaryAmount ?? null,
+      salaryPeriod: data.salaryPeriod ?? payload.salaryPeriod ?? null,
+    });
+  } catch (error: any) {
+    // Handle 403 Forbidden - admin trying to update to admin role
+    if (error?.response?.status === 403) {
+      throw new Error('You cannot update staff to admin accounts. Only staff roles are allowed.');
+    }
+    throw error;
+  }
 };
 
-export const deleteStaff = async (api: AxiosInstance, usernameOrId: string | number) => {
-  // Backend delete endpoint uses username, not ID
-  // If usernameOrId is a number, we need to find the username first
-  // But for simplicity, we'll use the provided identifier as username
-  const identifier = typeof usernameOrId === 'number' ? String(usernameOrId) : usernameOrId;
-  await api.delete(`/users/${encodeURIComponent(identifier.toLowerCase())}`);
+export const deleteStaff = async (api: AxiosInstance, idOrUsername: string | number) => {
+  // Backend endpoint: DELETE /api/admin/staff/{id}
+  // Backend validates that admin cannot delete admin accounts
+  // Prefer ID if available, otherwise use username
+  const identifier = typeof idOrUsername === 'number' ? idOrUsername : idOrUsername.toLowerCase();
+  try {
+    await api.delete(`/admin/staff/${encodeURIComponent(String(identifier))}`);
+  } catch (error: any) {
+    // Handle 403 Forbidden - admin trying to delete admin account
+    if (error?.response?.status === 403) {
+      throw new Error('You cannot delete admin accounts. Only staff members can be deleted.');
+    }
+    throw error;
+  }
 };
 
 export const listTables = async (api: AxiosInstance, restaurantId: number, branchId: number) => {

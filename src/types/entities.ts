@@ -35,6 +35,9 @@ export interface UserRecord {
   assignedBranchId?: number | null;
   fullName?: string | null;
   phone?: string | null;
+  phoneNumber?: string | null; // Staff phone number (required for staff members)
+  salaryAmount?: number | null; // Staff salary amount (required for staff members)
+  salaryPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | null; // Staff salary period (required for staff members)
 }
 
 export interface MenuItem {

@@ -92,7 +92,7 @@ export default function SuperadminStaffPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-bold text-slate-900">Staff directory</h1>
         <p className="text-sm text-slate-500">
-          View-only listing of all staff members across your restaurant branches.
+          View-only listing of all staff members across your restaurant branches. Superadmins cannot create or modify staff members.
         </p>
       </header>
 
@@ -115,10 +115,11 @@ export default function SuperadminStaffPage() {
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50">
               <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Email/Username</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Branch</th>
                 <th className="px-4 py-3">Phone</th>
+                <th className="px-4 py-3">Salary</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -128,12 +129,17 @@ export default function SuperadminStaffPage() {
                 const roleLabel = member.role.startsWith('ROLE_')
                   ? member.role.replace('ROLE_', '')
                   : member.role;
+                const phone = member.phoneNumber ?? member.phone ?? '—';
+                const salaryDisplay = member.salaryAmount
+                  ? `$${member.salaryAmount.toFixed(2)} ${member.salaryPeriod ? `(${member.salaryPeriod.toLowerCase()})` : ''}`
+                  : '—';
                 return (
                   <tr key={`${member.id ?? email}`}>
                     <td className="px-4 py-3 font-medium text-slate-900">{email}</td>
                     <td className="px-4 py-3">{roleLabel}</td>
                     <td className="px-4 py-3">{branch ? branch.name : 'Unassigned'}</td>
-                    <td className="px-4 py-3">{member.phone ?? '—'}</td>
+                    <td className="px-4 py-3">{phone}</td>
+                    <td className="px-4 py-3">{salaryDisplay}</td>
                   </tr>
                 );
               })}
