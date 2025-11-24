@@ -1,0 +1,52 @@
+### Customer API Test File
+### Base URL: http://localhost:3000/api (Next.js proxy) or http://localhost:8080/api (direct backend)
+
+@baseUrl = http://localhost:3000/api
+@branchId = 1
+@tableId = 1
+
+### 1. Start Customer Session
+POST {{baseUrl}}/customer/session/start
+Content-Type: application/json
+
+{
+  "branchId": {{branchId}},
+  "tableId": {{tableId}}
+}
+
+### 2. Get Customer Menu
+GET {{baseUrl}}/customer/menu?branchId={{branchId}}&tableId={{tableId}}
+
+### 3. Create Customer Order
+### Note: Replace {guestSessionId} with actual session ID from step 1
+POST {{baseUrl}}/customer/orders
+Content-Type: application/json
+
+{
+  "guestSessionId": "session-1234567890-abc123",
+  "branchId": {{branchId}},
+  "tableId": {{tableId}},
+  "items": [
+    {
+      "menuItemId": 1,
+      "qty": 2
+    },
+    {
+      "menuItemId": 2,
+      "qty": 1
+    }
+  ]
+}
+
+### 4. End Customer Session
+### Note: Replace {guestSessionId} with actual session ID
+POST {{baseUrl}}/customer/session/end
+Content-Type: application/json
+
+{
+  "guestSessionId": "session-1234567890-abc123"
+}
+
+### 5. Generate QR Code for Table
+GET {{baseUrl}}/qr/table/{{branchId}}/{{tableId}}
+

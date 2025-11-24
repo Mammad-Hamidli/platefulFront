@@ -1,0 +1,19 @@
+### Kitchen API Test File
+### Base URL: http://localhost:3000/api (Next.js proxy) or http://localhost:8080/api (direct backend)
+
+@baseUrl = http://localhost:3000/api
+@branchId = 1
+@orderId = 1
+
+### 1. Get Kitchen Orders (Non-completed orders for branch)
+GET {{baseUrl}}/kitchen/orders?branchId={{branchId}}
+
+### 2. Accept Order (Change status to ACCEPTED)
+PUT {{baseUrl}}/kitchen/orders/{{orderId}}/accept
+
+### 3. Mark Order as Preparing (Change status to PREPARING)
+PUT {{baseUrl}}/kitchen/orders/{{orderId}}/prepare
+
+### 4. Mark Order as Ready (Change status to READY_TO_SERVE)
+PUT {{baseUrl}}/kitchen/orders/{{orderId}}/ready
+

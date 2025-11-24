@@ -26,21 +26,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/admin/layout.js"
     ],
-    "/admin/staff/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/staff/page.js"
-    ],
-    "/admin/tables/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/tables/page.js"
-    ],
-    "/admin/menu/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/menu/page.js"
-    ],
     "/superadmin/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -55,11 +40,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/superadmin/branches/page.js"
-    ],
-    "/superadmin/staff/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/superadmin/staff/page.js"
     ]
   }
 }
