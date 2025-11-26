@@ -39,7 +39,14 @@ export const createBranch = async (
   restaurantId: number,
   payload: BranchCreatePayload
 ) => {
-  const { data } = await api.post<Branch>(`/restaurants/${restaurantId}/branches`, payload);
+  const body: Record<string, unknown> = {
+    name: payload.name,
+    restaurantId,
+  };
+  if (payload.adminUserId !== undefined && payload.adminUserId !== null) {
+    body.adminUserId = payload.adminUserId;
+  }
+  const { data } = await api.post<Branch>(`/restaurants/${restaurantId}/branches`, body);
   return data;
 };
 
@@ -61,7 +68,7 @@ export const assignAdminToBranch = async (
   branchId: number,
   adminUserId: number
 ) => {
-  await api.post(`/branches/${branchId}/assign-admin`, { adminId: adminUserId });
+  await api.post(`/branches/${branchId}/assign-admin`, { adminUserId });
 };
 
 export const listAdminsForRestaurant = async (api: AxiosInstance, restaurantId: number) => {
@@ -76,12 +83,12 @@ export const createAdmin = async (
   restaurantId: number,
   payload: AdminCreatePayload
 ) => {
-  const { data } = await api.post<UserRecord>('/users', {
+  const { data } = await api.post<UserRecord>('/superadmin/users', {
     email: payload.email.toLowerCase(),
     password: payload.password,
-    role: 'ROLE_ADMIN',
+    role: 'BRANCH_MANAGER',
     restaurantId,
-    branchId: payload.branchId ?? null,
+    ...(payload.branchId !== undefined && payload.branchId !== null ? { branchId: payload.branchId } : {}),
   });
   return data;
 };
@@ -94,6 +101,23 @@ export const updateAdmin = async (
   const { data } = await api.patch<UserRecord>(`/users/${encodeEmail(email)}`, {
     ...(payload.password ? { password: payload.password } : {}),
     ...(payload.branchId !== undefined ? { branchId: payload.branchId } : {}),
+  });
+  return data;
+};
+
+export const resetAdminPassword = async (
+  api: AxiosInstance,
+  adminId: number,
+  newPassword: string
+) => {
+  const { data } = await api.post<{
+    status: string;
+    message: string;
+    newPassword: string;
+    adminEmail: string;
+    adminUserId: number;
+  }>(`/superadmin/admins/${adminId}/reset-password`, {
+    newPassword,
   });
   return data;
 };

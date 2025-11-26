@@ -9,7 +9,7 @@ import {
   deleteAdmin,
   listAdminsForRestaurant,
   listBranches,
-  updateAdmin,
+  resetAdminPassword,
 } from '@/lib/api/superadmin';
 import type { Branch, UserRecord } from '@/types/entities';
 
@@ -157,25 +157,27 @@ export default function SuperadminAdminsPage() {
     setEditSubmitting(true);
     setState((prev) => ({ ...prev, error: null }));
     try {
-      const password = editForm.password.trim();
-      if (!password) {
+      const newPassword = editForm.password.trim();
+      if (!newPassword) {
         throw new Error('Enter a new password to update this admin.');
       }
-      const updated = await updateAdmin(api, editingAdminEmail, {
-        password,
-      });
+      const admin = state.admins.find((a) => a.email === editingAdminEmail);
+      if (!admin) {
+        throw new Error('Admin not found.');
+      }
+      await resetAdminPassword(api, admin.id, newPassword);
       setState((prev) => ({
         ...prev,
-        admins: prev.admins.map((admin) =>
-          admin.email === updated.email ? { ...admin, ...updated } : admin
+        admins: prev.admins.map((a) =>
+          a.email === editingAdminEmail ? { ...a } : a
         ),
       }));
       resetEditForm();
     } catch (error) {
-      console.error('[SuperadminAdmins] update error', error);
+      console.error('[SuperadminAdmins] password reset error', error);
       setState((prev) => ({
         ...prev,
-        error: error instanceof Error ? error.message : 'Failed to update admin.',
+        error: error instanceof Error ? error.message : 'Failed to reset admin password.',
       }));
     } finally {
       setEditSubmitting(false);

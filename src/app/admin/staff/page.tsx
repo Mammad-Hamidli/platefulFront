@@ -1,416 +1,330 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { useApi } from '@/hooks/useApi';
-import { createStaff, deleteStaff, listStaff, updateStaff } from '@/lib/api/admin';
-import type { UserRecord } from '@/types/entities';
+import { FormEvent, useState } from 'react';
 
-type StaffRole = 'ROLE_WAITER' | 'ROLE_KITCHEN';
+type StaffType = 'Waiter' | 'Cleaner';
+type SalaryCycle = 'Daily' | 'Weekly' | 'Monthly';
 
-const ROLE_OPTIONS: { label: string; value: StaffRole }[] = [
-  { label: 'Waiter', value: 'ROLE_WAITER' },
-  { label: 'Kitchen', value: 'ROLE_KITCHEN' },
+interface StaffForm {
+  staffType: StaffType;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+  salary: string;
+  salaryCycle: SalaryCycle;
+}
+
+interface StaffMember {
+  id: number;
+  email: string;
+  role: string;
+  branch: string;
+  phone: string;
+}
+
+const INITIAL_FORM: StaffForm = {
+  staffType: 'Waiter',
+  firstName: '',
+  lastName: '',
+  phoneNumber: '',
+  salary: '',
+  salaryCycle: 'Monthly',
+};
+
+const STAFF_TYPE_OPTIONS: { label: string; value: StaffType }[] = [
+  { label: 'Waiter', value: 'Waiter' },
+  { label: 'Cleaner', value: 'Cleaner' },
 ];
 
-interface CreateStaffForm {
-  email: string;
-  password: string;
-  role: StaffRole;
-}
+const SALARY_CYCLE_OPTIONS: { label: string; value: SalaryCycle }[] = [
+  { label: 'Daily', value: 'Daily' },
+  { label: 'Weekly', value: 'Weekly' },
+  { label: 'Monthly', value: 'Monthly' },
+];
 
-interface EditStaffForm {
-  role: StaffRole;
-  password: string;
-}
-
-const INITIAL_CREATE_FORM: CreateStaffForm = {
-  email: '',
-  password: '',
-  role: 'ROLE_WAITER',
-};
-
-const INITIAL_EDIT_FORM: EditStaffForm = {
-  role: 'ROLE_WAITER',
-  password: '',
-};
-
-const ROLE_LABEL: Record<StaffRole, string> = {
-  ROLE_WAITER: 'Waiter',
-  ROLE_KITCHEN: 'Kitchen',
-};
-
-const formatRole = (role: string) =>
-  ROLE_LABEL[role as StaffRole] ?? role.replace('ROLE_', '').toLowerCase();
+// Mock data for UI demonstration (will be replaced with backend data later)
+const MOCK_STAFF: StaffMember[] = [];
 
 export default function AdminStaffPage() {
-  const { user } = useAuth();
-  const api = useApi();
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState<StaffForm>(INITIAL_FORM);
+  const [submitting, setSubmitting] = useState(false);
+  const [staff, setStaff] = useState<StaffMember[]>(MOCK_STAFF);
 
-  const [staff, setStaff] = useState<UserRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const resetForm = () => {
+    setForm(INITIAL_FORM);
+  };
 
-  const [createForm, setCreateForm] = useState<CreateStaffForm>(INITIAL_CREATE_FORM);
-  const [creating, setCreating] = useState(false);
+  const handleOpenModal = () => {
+    resetForm();
+    setShowModal(true);
+  };
 
-  const [editingEmail, setEditingEmail] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<EditStaffForm>(INITIAL_EDIT_FORM);
-  const [saving, setSaving] = useState(false);
-
-  const branchId = user?.branchId ?? null;
-  const restaurantId = user?.restaurantId ?? null;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      if (!branchId) {
-        setStaff([]);
-        setLoading(false);
-        setError('Your profile is missing a branch assignment.');
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await listStaff(api, branchId);
-        if (!cancelled) {
-          setStaff(data);
-        }
-      } catch (err) {
-        console.error('[AdminStaff] load error', err);
-        if (!cancelled) {
-          setError('Failed to load staff list.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    if (user?.role === 'ROLE_ADMIN') {
-      void load();
-    } else {
-      setLoading(false);
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, branchId, user]);
-
-  const refreshStaff = async () => {
-    if (!branchId) return;
-    try {
-      const data = await listStaff(api, branchId);
-      setStaff(data);
-    } catch (err) {
-      console.error('[AdminStaff] refresh error', err);
-      setError('Failed to refresh staff list.');
+  const handleCloseModal = () => {
+    if (!submitting) {
+      setShowModal(false);
+      resetForm();
     }
   };
 
-  const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!restaurantId || !branchId) return;
-    setCreating(true);
-    setError(null);
-    try {
-      const email = createForm.email.trim().toLowerCase();
-      if (!email) {
-        throw new Error('Email is required');
-      }
-      const password = createForm.password.trim();
-      await createStaff(api, restaurantId, branchId, {
-        email,
-        role: createForm.role,
-        password: password ? password : undefined,
-      });
-      setCreateForm(INITIAL_CREATE_FORM);
-      await refreshStaff();
-    } catch (err) {
-      console.error('[AdminStaff] create error', err);
-      setError(err instanceof Error ? err.message : 'Failed to create staff member.');
-    } finally {
-      setCreating(false);
-    }
+    setSubmitting(true);
+    
+    // TODO: Add backend integration here
+    // For now, just simulate a delay and close the modal
+    setTimeout(() => {
+      console.log('Staff form submitted:', form);
+      // In a real implementation, this would add the staff member to the list
+      setSubmitting(false);
+      setShowModal(false);
+      resetForm();
+    }, 500);
   };
 
-  const startEdit = (member: UserRecord) => {
-    setEditingEmail(member.email);
-    setEditForm({
-      role: ROLE_LABEL[member.role as StaffRole] ? (member.role as StaffRole) : 'ROLE_WAITER',
-      password: '',
-    });
+  const formatRole = (role: string) => {
+    return role.replace('ROLE_', '').toUpperCase();
   };
-
-  const cancelEdit = () => {
-    setEditingEmail(null);
-    setEditForm(INITIAL_EDIT_FORM);
-  };
-
-  const handleEdit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!editingEmail) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const password = editForm.password.trim();
-      await updateStaff(api, editingEmail, {
-        role: editForm.role,
-        password: password ? password : undefined,
-      });
-      cancelEdit();
-      await refreshStaff();
-    } catch (err) {
-      console.error('[AdminStaff] update error', err);
-      setError('Failed to update staff member.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (email: string) => {
-    if (!confirm('Remove this staff member?')) return;
-    setError(null);
-    try {
-      await deleteStaff(api, email);
-      await refreshStaff();
-    } catch (err) {
-      console.error('[AdminStaff] delete error', err);
-      setError('Failed to delete staff member.');
-    }
-  };
-
-  const staffCount = useMemo(() => staff.length, [staff]);
-
-  if (user?.role !== 'ROLE_ADMIN') {
-    return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-900">
-        Access restricted to Admin role.
-      </div>
-    );
-  }
-
-  if (!branchId || !restaurantId) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">
-        Your administrator profile is missing branch or restaurant assignments. Please contact your
-        SuperAdmin.
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">
       <header className="space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">Branch staff</h1>
+        <h1 className="text-3xl font-bold text-slate-900">Staff directory</h1>
         <p className="text-sm text-slate-500">
-          Recruit, update, and remove staff members assigned to your branch.
+          View-only listing of all staff members across your restaurant branches.
         </p>
       </header>
 
-      {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
+      <div className="flex items-center justify-end">
+        <button
+          type="button"
+          onClick={handleOpenModal}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+        >
+          Add staff
+        </button>
+      </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-800">Add staff member</h2>
-        <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={handleCreate}>
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-full divide-y divide-slate-200">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                EMAIL
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                ROLE
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                BRANCH
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                PHONE
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 bg-white">
+            {staff.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-sm text-slate-500">
+                  No staff members found. Click "Add staff" to add your first staff member.
+                </td>
+              </tr>
+            ) : (
+              staff.map((member) => (
+                <tr key={member.id} className="hover:bg-slate-50">
+                  <td className="whitespace-nowrap px-6 py-4 text-sm font-medium text-slate-900">
+                    {member.email}
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-700">
+                    {formatRole(member.role)}
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-700">
+                    {member.branch || 'Unassigned'}
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-700">
+                    {member.phone || '—'}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <Modal
+        title="Add staff"
+        open={showModal}
+        onClose={handleCloseModal}
+      >
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label className="block text-xs font-medium text-slate-600" htmlFor="staff-email">
-              Email
-            </label>
-            <input
-              id="staff-email"
-              type="email"
-              required
-              value={createForm.email}
-              onChange={(event) =>
-                setCreateForm((prev) => ({ ...prev, email: event.target.value }))
-              }
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="waiter@restaurant.com"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600" htmlFor="staff-role">
-              Role
+            <label className="block text-xs font-medium text-slate-600" htmlFor="staff-type">
+              Staff type
             </label>
             <select
-              id="staff-role"
-              value={createForm.role}
+              id="staff-type"
+              required
+              value={form.staffType}
               onChange={(event) =>
-                setCreateForm((prev) => ({ ...prev, role: event.target.value as StaffRole }))
+                setForm((prev) => ({ ...prev, staffType: event.target.value as StaffType }))
               }
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={submitting}
             >
-              {ROLE_OPTIONS.map((option) => (
+              {STAFF_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
               ))}
             </select>
           </div>
-          <div className="sm:col-span-2">
-            <label className="block text-xs font-medium text-slate-600" htmlFor="staff-password">
-              Temporary password (optional)
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600" htmlFor="first-name">
+              First name
             </label>
             <input
-              id="staff-password"
+              id="first-name"
               type="text"
-              value={createForm.password}
+              required
+              value={form.firstName}
               onChange={(event) =>
-                setCreateForm((prev) => ({ ...prev, password: event.target.value }))
+                setForm((prev) => ({ ...prev, firstName: event.target.value }))
               }
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="Leave empty to auto-generate"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter first name"
+              disabled={submitting}
             />
           </div>
-          <div className="sm:col-span-2 flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={creating}
-              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600" htmlFor="last-name">
+              Last name
+            </label>
+            <input
+              id="last-name"
+              type="text"
+              required
+              value={form.lastName}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, lastName: event.target.value }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter last name"
+              disabled={submitting}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600" htmlFor="phone-number">
+              Phone number
+            </label>
+            <input
+              id="phone-number"
+              type="tel"
+              required
+              value={form.phoneNumber}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, phoneNumber: event.target.value }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="+1234567890"
+              disabled={submitting}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600" htmlFor="salary">
+              Salary
+            </label>
+            <input
+              id="salary"
+              type="number"
+              required
+              min="0"
+              step="0.01"
+              value={form.salary}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, salary: event.target.value }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="0.00"
+              disabled={submitting}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600" htmlFor="salary-cycle">
+              Salary cycle
+            </label>
+            <select
+              id="salary-cycle"
+              required
+              value={form.salaryCycle}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, salaryCycle: event.target.value as SalaryCycle }))
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={submitting}
             >
-              {creating ? 'Adding…' : 'Add staff member'}
-            </button>
+              {SALARY_CYCLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={() => setCreateForm(INITIAL_CREATE_FORM)}
-              className="text-sm font-medium text-slate-500 hover:text-slate-700"
-              disabled={creating}
+              onClick={handleCloseModal}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+              disabled={submitting}
             >
-              Reset
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? 'Adding…' : 'Add staff'}
             </button>
           </div>
         </form>
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-800">Current staff</h2>
-          <span className="text-xs font-medium text-slate-500">
-            {staffCount} {staffCount === 1 ? 'member' : 'members'}
-          </span>
-        </div>
-
-        {loading ? (
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-            Loading staff members…
-          </div>
-        ) : staff.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
-            No staff members found for this branch.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {staff.map((member) =>
-              editingEmail === member.email ? (
-                <form
-                  key={member.email}
-                  className="rounded-lg border border-blue-200 bg-blue-50 p-4"
-                  onSubmit={handleEdit}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="text-base font-semibold text-blue-900">{member.email}</h3>
-                      <p className="text-xs text-blue-700">User ID: {member.id}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-blue-700 hover:text-blue-900"
-                      onClick={cancelEdit}
-                      disabled={saving}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="block text-xs font-medium text-blue-800" htmlFor="edit-role">
-                        Role
-                      </label>
-                      <select
-                        id="edit-role"
-                        value={editForm.role}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({ ...prev, role: event.target.value as StaffRole }))
-                        }
-                        className="mt-1 w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      >
-                        {ROLE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        className="block text-xs font-medium text-blue-800"
-                        htmlFor="edit-password"
-                      >
-                        Reset password (optional)
-                      </label>
-                      <input
-                        id="edit-password"
-                        type="text"
-                        value={editForm.password}
-                        onChange={(event) =>
-                          setEditForm((prev) => ({ ...prev, password: event.target.value }))
-                        }
-                        className="mt-1 w-full rounded-lg border border-blue-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        placeholder="Leave empty to keep current password"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4 flex items-center gap-3">
-                    <button
-                      type="submit"
-                      disabled={saving}
-                      className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {saving ? 'Saving…' : 'Save changes'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <article
-                  key={member.email}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-                >
-                  <div>
-                    <h3 className="text-base font-semibold text-slate-900">{member.email}</h3>
-                    <p className="text-xs text-slate-500">Role: {formatRole(member.role)}</p>
-                  </div>
-                  <div className="flex gap-2 text-xs font-medium">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(member)}
-                      className="inline-flex items-center rounded-lg border border-blue-200 px-3 py-1 text-blue-600 transition hover:bg-blue-50"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(member.email)}
-                      className="inline-flex items-center rounded-lg border border-red-200 px-3 py-1 text-red-600 transition hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </article>
-              )
-            )}
-          </div>
-        )}
-      </section>
+      </Modal>
     </div>
   );
 }
 
+interface ModalProps {
+  title: string;
+  open: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}
+
+function Modal({ title, open, onClose, children }: ModalProps) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <span className="sr-only">Close</span>
+            ×
+          </button>
+        </div>
+        <div className="mt-4">{children}</div>
+      </div>
+    </div>
+  );
+}

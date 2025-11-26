@@ -39,6 +39,7 @@ export default function AdminTablesPage() {
   const [creating, setCreating] = useState<boolean>(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingTable, setEditingTable] = useState<TableEntity | null>(null);
   const [editForm, setEditForm] = useState<EditTableForm>({
     name: '',
     seatCount: '',
@@ -127,6 +128,7 @@ export default function AdminTablesPage() {
 
   const startEdit = (table: TableEntity) => {
     setEditingId(table.id);
+    setEditingTable(table);
     setEditForm({
       name: table.name ?? '',
       seatCount: table.seatCount != null ? String(table.seatCount) : '',
@@ -137,12 +139,13 @@ export default function AdminTablesPage() {
 
   const cancelEdit = () => {
     setEditingId(null);
+    setEditingTable(null);
     setEditForm({ name: '', seatCount: '', tableNumber: '', active: true });
   };
 
   const handleEdit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (editingId == null) return;
+    if (editingId == null || !editingTable) return;
     setSaving(true);
     setError(null);
     try {
@@ -152,7 +155,8 @@ export default function AdminTablesPage() {
         name: editForm.name.trim() || `Table ${editingId}`,
         seatCount,
         tableNumber,
-        active: editForm.active,
+        restaurantId: editingTable.restaurantId,
+        branchId: editingTable.branchId,
       });
       cancelEdit();
       await refreshTables();

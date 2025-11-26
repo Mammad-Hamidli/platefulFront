@@ -1,9 +1,14 @@
 {
   "pages": {
-    "/page": [
+    "/superadmin/staff/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
+      "static/chunks/app/superadmin/staff/page.js"
+    ],
+    "/superadmin/layout": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/superadmin/layout.js"
     ],
     "/layout": [
       "static/chunks/webpack.js",
@@ -20,31 +25,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/superadmin/dashboard/page.js"
-    ],
-    "/superadmin/layout": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/superadmin/layout.js"
-    ],
-    "/superadmin/branches/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/superadmin/branches/page.js"
-    ],
-    "/superadmin/staff/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/superadmin/staff/page.js"
-    ],
-    "/superadmin/admins/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/superadmin/admins/page.js"
-    ],
-    "/_not-found/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/_not-found/page.js"
     ]
   }
 }

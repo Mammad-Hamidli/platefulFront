@@ -16,7 +16,8 @@ export interface TablePayload {
   name?: string | null;
   tableNumber?: number | null;
   seatCount?: number | null;
-  active?: boolean;
+  restaurantId?: number;
+  branchId?: number;
 }
 
 const STAFF_ROLES = new Set(['ROLE_WAITER', 'ROLE_KITCHEN']);
@@ -87,7 +88,6 @@ export const createTable = async (
     name: payload.name ?? '',
     tableNumber: payload.tableNumber ?? null,
     seatCount: payload.seatCount ?? null,
-    active: payload.active ?? true,
   });
   return data;
 };
@@ -97,12 +97,18 @@ export const updateTable = async (
   tableId: number,
   payload: TablePayload
 ) => {
-  const { data } = await api.put<TableEntity>(`/tables/${tableId}`, {
+  const body: Record<string, unknown> = {
     name: payload.name ?? '',
     tableNumber: payload.tableNumber ?? null,
     seatCount: payload.seatCount ?? null,
-    active: payload.active ?? true,
-  });
+  };
+  if (payload.restaurantId !== undefined) {
+    body.restaurantId = payload.restaurantId;
+  }
+  if (payload.branchId !== undefined) {
+    body.branchId = payload.branchId;
+  }
+  const { data } = await api.put<TableEntity>(`/tables/${tableId}`, body);
   return data;
 };
 
