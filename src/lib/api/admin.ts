@@ -5,6 +5,9 @@ export interface StaffCreatePayload {
   email: string;
   role: 'ROLE_WAITER' | 'ROLE_KITCHEN';
   password?: string;
+  phoneNumber?: string;
+  salaryAmount?: number;
+  salaryPeriod?: 'DAILY' | 'WEEKLY' | 'MONTHLY';
 }
 
 export interface StaffUpdatePayload {
@@ -48,6 +51,17 @@ export const createStaff = async (
   };
   if (payload.password) {
     body.password = payload.password;
+  }
+  // Required fields for staff members
+  if (payload.phoneNumber !== undefined && payload.phoneNumber !== null) {
+    body.phoneNumber = payload.phoneNumber;
+  }
+  if (payload.salaryAmount !== undefined && payload.salaryAmount !== null) {
+    // Ensure salaryAmount is sent as a number (float/double), not BigDecimal
+    body.salaryAmount = Number(payload.salaryAmount);
+  }
+  if (payload.salaryPeriod !== undefined && payload.salaryPeriod !== null) {
+    body.salaryPeriod = payload.salaryPeriod;
   }
   const { data } = await api.post<UserRecord>('/users', body);
   return data;
