@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import {
@@ -9,15 +9,13 @@ import {
   deleteAdmin,
   listAdminsForRestaurant,
   listBranches,
-  updateAdmin,
+  resetAdminPassword,
 } from '@/lib/api/superadmin';
 import type { Branch, UserRecord } from '@/types/entities';
 
 interface AdminCreateForm {
-  fullName: string;
   email: string;
   password: string;
-  phoneNumber: string;
   branchId: string;
 }
 
@@ -40,10 +38,8 @@ const INITIAL_STATE: AdminState = {
 };
 
 const INITIAL_CREATE_FORM: AdminCreateForm = {
-  fullName: '',
   email: '',
   password: '',
-  phoneNumber: '',
   branchId: '',
 };
 
@@ -69,43 +65,6 @@ export default function SuperadminAdminsPage() {
 
   const restaurantId = user?.restaurantId ?? null;
 
-  const fetchAdminData = useCallback(async () => {
-    if (!restaurantId) {
-      return { admins: [], branches: [] };
-    }
-    const [admins, branches] = await Promise.all([
-      listAdminsForRestaurant(api, restaurantId),
-      listBranches(api, restaurantId),
-    ]);
-    return { admins, branches };
-  }, [api, restaurantId]);
-
-  const refreshData = useCallback(async () => {
-    if (!restaurantId) {
-      return;
-    }
-    try {
-      setState((prev) => ({
-        ...prev,
-        loading: true,
-      }));
-      const { admins, branches } = await fetchAdminData();
-      setState({
-        admins,
-        branches,
-        loading: false,
-        error: null,
-      });
-    } catch (error) {
-      console.error('[SuperadminAdmins] refresh error', error);
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        error: 'Failed to refresh admin data.',
-      }));
-    }
-  }, [fetchAdminData, restaurantId]);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -116,12 +75,11 @@ export default function SuperadminAdminsPage() {
       }
       setState((prev) => ({ ...prev, loading: true, error: null }));
       try {
-        const { admins, branches } = await fetchAdminData();
+        const [admins, branches] = await Promise.all([
+          listAdminsForRestaurant(api, restaurantId),
+          listBranches(api, restaurantId),
+        ]);
         if (cancelled) return;
-      console.log('[SuperadminAdmins] load success', {
-        adminCount: admins.length,
-        branchCount: branches.length,
-      });
         setState({ admins, branches, loading: false, error: null });
       } catch (error) {
         console.error('[SuperadminAdmins] load error', error);
@@ -139,7 +97,7 @@ export default function SuperadminAdminsPage() {
     return () => {
       cancelled = true;
     };
-  }, [fetchAdminData, restaurantId, user]);
+  }, [api, restaurantId, user]);
 
   const branchOptions = useMemo(() => {
     const map = new Map<number, Branch>();
@@ -163,24 +121,21 @@ export default function SuperadminAdminsPage() {
     setCreateSubmitting(true);
     setState((prev) => ({ ...prev, error: null }));
     try {
-      const fullName = createForm.fullName.trim();
       const email = createForm.email.trim().toLowerCase();
       const password = createForm.password.trim();
-      if (!fullName) {
-        throw new Error('Full name is required.');
-      }
       if (!email || !password) {
         throw new Error('Email and password are required.');
       }
       const branchId = createForm.branchId ? Number(createForm.branchId) : undefined;
-      await createAdmin(api, restaurantId, {
+      const admin = await createAdmin(api, restaurantId, {
         email,
         password,
-        fullName,
-        phoneNumber: createForm.phoneNumber.trim() || undefined,
         branchId,
       });
-      await refreshData();
+      setState((prev) => ({
+        ...prev,
+        admins: [admin, ...prev.admins],
+      }));
       resetCreateForm();
       setShowCreate(false);
     } catch (error) {
@@ -192,7 +147,7 @@ export default function SuperadminAdminsPage() {
   };
 
   const openEditModal = (admin: UserRecord) => {
-    setEditingAdminEmail(admin.username ?? admin.email ?? null);
+    setEditingAdminEmail(admin.email);
     setEditForm(INITIAL_EDIT_FORM);
   };
 
@@ -202,101 +157,75 @@ export default function SuperadminAdminsPage() {
     setEditSubmitting(true);
     setState((prev) => ({ ...prev, error: null }));
     try {
-      const password = editForm.password.trim();
-      if (!password) {
+      const newPassword = editForm.password.trim();
+      if (!newPassword) {
         throw new Error('Enter a new password to update this admin.');
       }
-      await updateAdmin(api, editingAdminEmail, {
-        password,
-      });
-      await refreshData();
-      resetEditForm();
-    } catch (error) {
-      console.error('[SuperadminAdmins] update error', error);
+      const admin = state.admins.find((a) => a.email === editingAdminEmail);
+      if (!admin) {
+        throw new Error('Admin not found.');
+      }
+      await resetAdminPassword(api, admin.id, newPassword);
       setState((prev) => ({
         ...prev,
-        error: error instanceof Error ? error.message : 'Failed to update admin.',
+        admins: prev.admins.map((a) =>
+          a.email === editingAdminEmail ? { ...a } : a
+        ),
+      }));
+      resetEditForm();
+    } catch (error) {
+      console.error('[SuperadminAdmins] password reset error', error);
+      setState((prev) => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to reset admin password.',
       }));
     } finally {
       setEditSubmitting(false);
     }
   };
 
-  const handleDelete = async (admin: UserRecord) => {
-    const label =
-      admin.fullName ??
-      admin.adminEmail ??
-      admin.email ??
-      admin.username ??
-      'this admin';
-    if (!confirm(`Delete ${label}? They will lose access immediately.`)) {
+  const handleDelete = async (email: string) => {
+    if (!confirm('Delete this admin? They will lose access immediately.')) {
       return;
     }
-    
-    // Validate that we have a username or email to delete
-    const username = admin.username ?? null;
-    const email = admin.adminEmail ?? admin.email ?? null;
-    if (!username && !email) {
-      setState((prev) => ({
-        ...prev,
-        error: 'Cannot delete admin: missing username and email. Please refresh the page and try again.',
-      }));
-      return;
-    }
-
     setState((prev) => ({ ...prev, error: null }));
     try {
-      await deleteAdmin(api, {
-        adminUserId: admin.adminUserId ?? admin.id ?? null,
-        username,
-        email,
-      });
-      await refreshData();
-      if (editingAdminEmail === (username ?? email ?? null)) {
+      await deleteAdmin(api, email);
+      setState((prev) => ({
+        ...prev,
+        admins: prev.admins.filter((admin) => admin.email !== email),
+      }));
+      if (editingAdminEmail === email) {
         resetEditForm();
       }
-      if (
-        assigningAdmin &&
-        (assigningAdmin.adminUserId ?? assigningAdmin.id) ===
-          (admin.adminUserId ?? admin.id)
-      ) {
+      if (assigningAdmin?.email === email) {
         resetAssignForm();
       }
     } catch (error) {
       console.error('[SuperadminAdmins] delete error', error);
-      const errorMessage =
-        error instanceof Error
-          ? error.message.includes('username or email is required')
-            ? 'Cannot delete admin: missing username or email. Please refresh the page and try again.'
-            : error.message
-          : 'Failed to delete admin. Please check the console for details.';
-      setState((prev) => ({ ...prev, error: errorMessage }));
+      setState((prev) => ({ ...prev, error: 'Failed to delete admin.' }));
     }
   };
 
   const openAssignModal = (admin: UserRecord) => {
     setAssigningAdmin(admin);
-    const assignedBranchId = admin.assignedBranchId ?? admin.branchId ?? null;
-    setAssignBranchId(assignedBranchId ? String(assignedBranchId) : '');
+    setAssignBranchId(admin.branchId ? String(admin.branchId) : '');
   };
 
   const handleAssign = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!assigningAdmin || !assignBranchId) return;
-    const adminUserId = assigningAdmin.adminUserId ?? assigningAdmin.id;
-    if (adminUserId === null || adminUserId === undefined) {
-      setState((prev) => ({
-        ...prev,
-        error: 'Selected admin is missing an identifier. Please refresh and try again.',
-      }));
-      return;
-    }
     setAssignSubmitting(true);
     setState((prev) => ({ ...prev, error: null }));
     try {
+      await assignAdminToBranch(api, Number(assignBranchId), assigningAdmin.id);
       const branchId = Number(assignBranchId);
-      await assignAdminToBranch(api, branchId, adminUserId);
-      await refreshData();
+      setState((prev) => ({
+        ...prev,
+        admins: prev.admins.map((admin) =>
+          admin.email === assigningAdmin.email ? { ...admin, branchId } : admin
+        ),
+      }));
       resetAssignForm();
     } catch (error) {
       console.error('[SuperadminAdmins] assign error', error);
@@ -360,49 +289,23 @@ export default function SuperadminAdminsPage() {
       ) : (
         <div className="space-y-3">
           {state.admins.map((admin) => {
-            const adminId = admin.adminUserId ?? admin.id ?? null;
-            const branchId = admin.assignedBranchId ?? admin.branchId ?? null;
-            const branch = branchId ? branchOptions.get(branchId) : null;
-            const identifier = admin.username ?? admin.adminEmail ?? admin.email ?? null;
-            const displayEmail = admin.adminEmail ?? admin.email ?? null;
-            const displayUsername = admin.username ?? null;
-            const displayTitle =
-              admin.fullName ?? displayEmail ?? displayUsername ?? 'Unknown admin';
-            const fallbackKey = identifier ?? `admin-${adminId ?? Math.random()}`;
+            const branch = admin.branchId ? branchOptions.get(admin.branchId) : null;
             return (
               <article
-                key={fallbackKey}
+                key={admin.email}
                 className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-slate-900">{displayTitle}</h2>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Admin ID: {adminId ?? '—'}
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Username:{' '}
-                      <span className="font-medium text-slate-700">
-                        {displayUsername ?? '—'}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Email:{' '}
-                      <span className="font-medium text-slate-700">
-                        {displayEmail ?? '—'}
-                      </span>
-                    </p>
+                    <h2 className="text-lg font-semibold text-slate-900">{admin.email}</h2>
+                    <div className="mt-1 text-xs text-slate-500">Admin ID: {admin.id}</div>
                     <p className="mt-2 text-sm text-slate-600">
-                      Assigned branch:{' '}
-                      <span className="font-medium text-slate-900">
-                        {branch ? branch.name : 'Unassigned'}
-                      </span>
+                      Assigned branch: <span className="font-medium text-slate-900">{branch ? branch.name : 'Unassigned'}</span>
                     </p>
                   </div>
                   <div className="flex flex-col items-stretch gap-2 text-xs font-medium text-slate-600 sm:flex-row">
                     <button
                       type="button"
-                      disabled={adminId === null || adminId === undefined}
                       onClick={() => openAssignModal(admin)}
                       className="inline-flex items-center justify-center rounded-lg border border-emerald-200 px-3 py-1 text-emerald-600 transition hover:bg-emerald-50"
                     >
@@ -417,10 +320,7 @@ export default function SuperadminAdminsPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={adminId === null || adminId === undefined}
-                      onClick={() => {
-                        handleDelete(admin);
-                      }}
+                      onClick={() => handleDelete(admin.email)}
                       className="inline-flex items-center justify-center rounded-lg border border-red-200 px-3 py-1 text-red-600 transition hover:bg-red-50"
                     >
                       Delete
@@ -444,19 +344,6 @@ export default function SuperadminAdminsPage() {
         }}
       >
         <form className="space-y-4" onSubmit={handleCreate}>
-          <div>
-            <label className="block text-xs font-medium text-slate-600" htmlFor="admin-full-name">
-              Full name
-            </label>
-            <input
-              id="admin-full-name"
-              required
-              value={createForm.fullName}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, fullName: event.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="Jane Doe"
-            />
-          </div>
           <div>
             <label className="block text-xs font-medium text-slate-600" htmlFor="admin-email">
               Email
@@ -483,30 +370,6 @@ export default function SuperadminAdminsPage() {
               onChange={(event) => setCreateForm((prev) => ({ ...prev, password: event.target.value }))}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
               placeholder="Temporary password"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600" htmlFor="admin-phone">
-              Phone number (optional)
-            </label>
-            <input
-              id="admin-phone"
-              type="tel"
-              value={createForm.phoneNumber}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, phoneNumber: event.target.value }))}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-              placeholder="+1 555 000 0000"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600" htmlFor="admin-restaurant">
-              Restaurant ID
-            </label>
-            <input
-              id="admin-restaurant"
-              value={restaurantId ?? ''}
-              readOnly
-              className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
             />
           </div>
           <div>
@@ -594,11 +457,7 @@ export default function SuperadminAdminsPage() {
       </Modal>
 
       <Modal
-        title={
-          assigningAdmin
-            ? `Assign branch to ${assigningAdmin.email ?? assigningAdmin.username ?? 'Unknown admin'}`
-            : 'Assign branch'
-        }
+        title={assigningAdmin ? `Assign branch to ${assigningAdmin.email}` : 'Assign branch'}
         open={Boolean(assigningAdmin)}
         onClose={() => {
           if (!assignSubmitting) resetAssignForm();
