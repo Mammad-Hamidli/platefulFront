@@ -96,13 +96,26 @@ export const createTable = async (
   branchId: number,
   payload: TablePayload
 ) => {
-  const { data } = await api.post<TableEntity>('/tables', {
+  // Backend CreateTableRequest: restaurantId (required), branchId (required), name (required),
+  // seatCount (required, positive Integer), tableNumber (optional Integer)
+  // NOTE: active field is NOT in CreateTableRequest - do not send it
+  if (!payload.name || !payload.name.trim()) {
+    throw new Error('Table name is required');
+  }
+  if (!payload.seatCount || payload.seatCount <= 0) {
+    throw new Error('Seat count must be a positive number');
+  }
+  const body: Record<string, unknown> = {
     restaurantId,
     branchId,
-    name: payload.name ?? '',
-    tableNumber: payload.tableNumber ?? null,
-    seatCount: payload.seatCount ?? null,
-  });
+    name: payload.name.trim(),
+    seatCount: Number(payload.seatCount), // Must be positive Integer
+  };
+  // Only include tableNumber if it's provided (it's optional)
+  if (payload.tableNumber !== undefined && payload.tableNumber !== null) {
+    body.tableNumber = Number(payload.tableNumber);
+  }
+  const { data } = await api.post<TableEntity>('/tables', body);
   return data;
 };
 
@@ -135,5 +148,75 @@ export const listMenuItems = async (api: AxiosInstance, restaurantId: number) =>
     params: { restId: restaurantId },
   });
   return data ?? [];
+};
+
+export const createMenuItem = async (
+  api: AxiosInstance,
+  restaurantId: number,
+  payload: {
+    name: string;
+    description?: string | null;
+    priceCents: number;
+    category?: string | null;
+    isAvailable?: boolean;
+  }
+) => {
+  // Backend CreateMenuItemRequest: restaurantId (required), name (required), description (optional),
+  // priceCents (required, positive Long), category (optional), isAvailable (optional Boolean, defaults to true)
+  if (!payload.name || !payload.name.trim()) {
+    throw new Error('Menu item name is required');
+  }
+  if (!payload.priceCents || payload.priceCents <= 0) {
+    throw new Error('Price must be a positive number');
+  }
+  const body = {
+    restaurantId,
+    name: payload.name.trim(),
+    description: payload.description?.trim() || null,
+    priceCents: Number(payload.priceCents), // Must be positive Long
+    category: payload.category?.trim() || null,
+    isAvailable: payload.isAvailable !== undefined ? payload.isAvailable : true,
+  };
+  const { data } = await api.post<MenuItem>('/menu', body);
+  return data;
+};
+
+export const updateMenuItem = async (
+  api: AxiosInstance,
+  menuItemId: number,
+  payload: {
+    name?: string | null;
+    description?: string | null;
+    priceCents?: number | null;
+    category?: string | null;
+    isAvailable?: boolean | null;
+  }
+) => {
+  // Backend UpdateMenuItemRequest: all fields optional (name, description, priceCents, category, isAvailable)
+  const body: Record<string, unknown> = {};
+  if (payload.name !== undefined && payload.name !== null) {
+    body.name = payload.name.trim();
+  }
+  if (payload.description !== undefined) {
+    body.description = payload.description?.trim() || null;
+  }
+  if (payload.priceCents !== undefined && payload.priceCents !== null) {
+    if (payload.priceCents <= 0) {
+      throw new Error('Price must be a positive number');
+    }
+    body.priceCents = Number(payload.priceCents);
+  }
+  if (payload.category !== undefined) {
+    body.category = payload.category?.trim() || null;
+  }
+  if (payload.isAvailable !== undefined) {
+    body.isAvailable = payload.isAvailable;
+  }
+  const { data } = await api.put<MenuItem>(`/menu/${menuItemId}`, body);
+  return data;
+};
+
+export const deleteMenuItem = async (api: AxiosInstance, menuItemId: number) => {
+  await api.delete(`/menu/${menuItemId}`);
 };
 

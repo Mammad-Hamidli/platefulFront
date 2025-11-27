@@ -108,19 +108,30 @@ export default function AdminTablesPage() {
     setCreating(true);
     setError(null);
     try {
-      const seatCount = createForm.seatCount ? Number(createForm.seatCount) : null;
+      // Validate seatCount - it's required and must be positive
+      if (!createForm.seatCount || createForm.seatCount.trim() === '') {
+        throw new Error('Seat count is required');
+      }
+      const seatCount = Number(createForm.seatCount);
+      if (isNaN(seatCount) || seatCount <= 0) {
+        throw new Error('Seat count must be a positive number');
+      }
+      
+      // tableNumber is optional
       const tableNumber = createForm.tableNumber ? Number(createForm.tableNumber) : null;
+      
       await createTable(api, restaurantId, branchId, {
         name: createForm.name.trim() || `Table ${Date.now()}`,
         seatCount,
         tableNumber,
-        active: createForm.active,
+        // Note: 'active' field is not sent - backend doesn't accept it in CreateTableRequest
       });
       setCreateForm(INITIAL_CREATE_FORM);
       await refreshTables();
     } catch (err) {
       console.error('[AdminTables] create error', err);
-      setError('Failed to create table.');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create table.';
+      setError(errorMessage);
     } finally {
       setCreating(false);
     }
@@ -245,10 +256,13 @@ export default function AdminTablesPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600" htmlFor="table-seat">
-              Seat count
+              Seat count <span className="text-red-500">*</span>
             </label>
             <input
               id="table-seat"
+              type="number"
+              min="1"
+              required
               value={createForm.seatCount}
               onChange={(event) =>
                 setCreateForm((prev) => ({ ...prev, seatCount: event.target.value }))
